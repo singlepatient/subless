@@ -93,6 +93,7 @@ export default function SettingsDialog({
             <DialogContent className={classes.content}>
                 <SettingsForm
                     anki={anki}
+                    extension={extension}
                     extensionInstalled={extension.installed}
                     extensionVersion={extension.installed ? extension.version : undefined}
                     extensionSupportsAppIntegration={extension.supportsAppIntegration}

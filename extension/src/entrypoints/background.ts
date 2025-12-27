@@ -65,6 +65,9 @@ import ClearCopyHistoryHandler from '@/handlers/asbplayerv2/clear-copy-history-h
 import SaveCopyHistoryHandler from '@/handlers/asbplayerv2/save-copy-history-handler';
 import PageConfigHandler from '@/handlers/asbplayerv2/page-config-handler';
 import EncodeMp3Handler from '@/handlers/video/encode-mp3-handler';
+import SaveWatchTimeHandler from '@/handlers/video/save-watch-time-handler';
+import RequestWatchTimeStatsHandler from '@/handlers/video/request-watch-time-stats-handler';
+import ClearWatchTimeHandler from '@/handlers/video/clear-watch-time-handler';
 
 export default defineBackground(() => {
     if (!isFirefoxBuild) {
@@ -148,6 +151,9 @@ export default defineBackground(() => {
         new SaveCopyHistoryHandler(settings),
         new DeleteCopyHistoryHandler(settings),
         new ClearCopyHistoryHandler(settings),
+        new SaveWatchTimeHandler(settings),
+        new RequestWatchTimeStatsHandler(settings),
+        new ClearWatchTimeHandler(settings),
         new PublishCardHandler(cardPublisher),
         new BulkExportCancellationHandler(cardPublisher),
         new BulkExportStartedHandler(cardPublisher),

@@ -482,6 +482,12 @@ const settingsSchema = {
         lastSelectedAnkiExportMode: {
             type: 'string',
         },
+        watchTimeTrackingEnabled: {
+            type: 'boolean',
+        },
+        watchTimeRetentionDays: {
+            type: 'number',
+        },
         dictionaryTracks: {
             type: 'array',
             items: {

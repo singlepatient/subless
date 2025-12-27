@@ -198,6 +198,8 @@ export const defaultSettings: AsbplayerSettings = {
     webSocketServerUrl: 'ws://127.0.0.1:8766/ws',
     pauseOnHoverMode: 0,
     lastSelectedAnkiExportMode: 'default',
+    watchTimeTrackingEnabled: true,
+    watchTimeRetentionDays: 365,
     dictionaryTracks: [defaultDictionaryTrackSettings, defaultDictionaryTrackSettings, defaultDictionaryTrackSettings],
 };
 

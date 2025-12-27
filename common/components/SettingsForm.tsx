@@ -21,6 +21,8 @@ import SubtitleAppearanceSettingsTab from './SubtitleAppearanceSettingsTab';
 import KeyboardShortcutsSettingsTab from './KeyboardShortcutsSettingsTab';
 import StreamingVideoSettingsTab from './StreamingVideoSettingsTab';
 import MiscSettingsTab from './MiscSettingsTab';
+import WatchTimeSettingsTab from './WatchTimeSettingsTab';
+import type ChromeExtension from '../app/services/chrome-extension';
 
 interface StylesProps {
     smallScreen: boolean;
@@ -148,6 +150,7 @@ type TabName =
     | 'subtitle-appearance'
     | 'keyboard-shortcuts'
     | 'streaming-video'
+    | 'watch-time'
     | 'misc-settings';
 
 interface SettingsFormPageConfig extends PageConfig {
@@ -158,6 +161,7 @@ export type PageConfigMap = { [K in keyof PageSettings]: SettingsFormPageConfig 
 
 interface Props {
     anki: Anki;
+    extension?: ChromeExtension;
     extensionInstalled: boolean;
     extensionVersion?: string;
     extensionSupportsAppIntegration: boolean;
@@ -193,6 +197,7 @@ const cssStyles = Object.keys(document.body.style).filter((s) => !isNumeric(s));
 
 export default function SettingsForm({
     anki,
+    extension,
     settings,
     pageConfigs,
     extensionInstalled,
@@ -241,6 +246,7 @@ export default function SettingsForm({
             'keyboard-shortcuts',
             'dictionary',
             'streaming-video',
+            'watch-time',
             'misc-settings',
             'about',
         ];
@@ -249,8 +255,12 @@ export default function SettingsForm({
             tabs.splice(tabs.indexOf('streaming-video'), 1);
         }
 
+        if (!extensionInstalled) {
+            tabs.splice(tabs.indexOf('watch-time'), 1);
+        }
+
         return Object.fromEntries(tabs.map((tab, i) => [tab, i]));
-    }, [extensionSupportsAppIntegration]);
+    }, [extensionSupportsAppIntegration, extensionInstalled]);
 
     useEffect(() => {
         if (!scrollToId) {
@@ -301,10 +311,13 @@ export default function SettingsForm({
                 <Tab tabIndex={3} label={t('settings.keyboardShortcuts')} id="keyboard-shortcuts" />
                 <Tab tabIndex={4} label={t('settings.annotation')} id="dictionary" />
                 {extensionSupportsAppIntegration && (
-                    <Tab tabIndex={5} label={t('settings.streamingVideo')} id="streaming-video" />
+                    <Tab label={t('settings.streamingVideo')} id="streaming-video" />
                 )}
-                <Tab tabIndex={extensionSupportsAppIntegration ? 6 : 5} label={t('settings.misc')} id="misc-settings" />
-                <Tab tabIndex={extensionSupportsAppIntegration ? 7 : 6} label={t('about.title')} id="about" />
+                {extensionInstalled && (
+                    <Tab label={t('settings.watchTime', 'Statistics')} id="watch-time" />
+                )}
+                <Tab label={t('settings.misc')} id="misc-settings" />
+                <Tab label={t('about.title')} id="about" />
             </Tabs>
             <TabPanel
                 ref={ankiPanelRef}
@@ -369,6 +382,15 @@ export default function SettingsForm({
                     pageConfigs={pageConfigs}
                 />
             </TabPanel>
+            {extensionInstalled && (
+                <TabPanel value={tabIndex} index={tabIndicesById['watch-time']} tabsOrientation={tabsOrientation}>
+                    <WatchTimeSettingsTab
+                        settings={settings}
+                        onSettingChanged={handleSettingChanged}
+                        extension={extension}
+                    />
+                </TabPanel>
+            )}
             <TabPanel value={tabIndex} index={tabIndicesById['misc-settings']} tabsOrientation={tabsOrientation}>
                 <MiscSettingsTab
                     settings={settings}

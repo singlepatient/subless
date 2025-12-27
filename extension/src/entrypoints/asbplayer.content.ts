@@ -6,6 +6,8 @@ import type {
     RequestCopyHistoryMessage,
     RequestCopyHistoryResponse,
     RequestSubtitlesResponse,
+    RequestWatchTimeStatsMessage,
+    RequestWatchTimeStatsResponse,
     SetActiveProfileMessage,
     SetGlobalStateMessage,
     SetSettingsMessage,
@@ -125,6 +127,21 @@ export default defineContentScript({
                         });
                         break;
                     case 'clear-copy-history':
+                        await browser.runtime.sendMessage(command);
+                        sendMessageToPlayer({
+                            messageId: command.message.messageId,
+                        });
+                        break;
+                    case 'request-watch-time-stats':
+                        const requestWatchTimeStatsMessage = command.message as RequestWatchTimeStatsMessage;
+                        sendMessageToPlayer({
+                            response: (await browser.runtime.sendMessage(command)) as
+                                | RequestWatchTimeStatsResponse
+                                | undefined,
+                            messageId: requestWatchTimeStatsMessage.messageId,
+                        });
+                        break;
+                    case 'clear-watch-time':
                         await browser.runtime.sendMessage(command);
                         sendMessageToPlayer({
                             messageId: command.message.messageId,

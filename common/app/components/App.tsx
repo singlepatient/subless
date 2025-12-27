@@ -40,6 +40,7 @@ import CopyHistory from './CopyHistory';
 import LandingPage from './LandingPage';
 import Player, { MediaSources } from './Player';
 import SettingsDialog from './SettingsDialog';
+import StatisticsPage from '../../components/StatisticsPage';
 import VideoPlayer, { SeekRequest } from './VideoPlayer';
 import { type AlertColor } from '@mui/material/Alert';
 import VideoChannel from '../services/video-channel';
@@ -303,6 +304,7 @@ function App({
     const miningContext = useMemo(() => new MiningContext(), []);
     const [settingsDialogOpen, setSettingsDialogOpen] = useState<boolean>(false);
     const [settingsDialogScrollToId, setSettingsDialogScrollToId] = useState<string>();
+    const [statisticsDialogOpen, setStatisticsDialogOpen] = useState<boolean>(false);
     const [disableKeyEvents, setDisableKeyEvents] = useState<boolean>(false);
     const [tab, setTab] = useState<VideoTabModel>();
     const [availableTabs, setAvailableTabs] = useState<VideoTabModel[]>();
@@ -557,6 +559,14 @@ function App({
         setDisableKeyEvents(true);
         setSettingsDialogOpen(true);
     }, []);
+    const handleOpenStatistics = useCallback(() => {
+        setDisableKeyEvents(true);
+        setStatisticsDialogOpen(true);
+    }, []);
+    const handleCloseStatistics = useCallback(() => {
+        setStatisticsDialogOpen(false);
+        setDisableKeyEvents(ankiDialogOpen);
+    }, [ankiDialogOpen]);
     const handleAlertClosed = useCallback(() => setAlertOpen(false), []);
     const handleCloseSettings = useCallback(() => {
         setSettingsDialogOpen(false);
@@ -1348,6 +1358,11 @@ function App({
                                 scrollToId={settingsDialogScrollToId}
                                 {...profilesContext}
                             />
+                            <StatisticsPage
+                                extension={extension}
+                                open={statisticsDialogOpen}
+                                onClose={handleCloseStatistics}
+                            />
                             <NeedRefreshDialog
                                 open={needRefreshDialogOpen}
                                 onRefresh={updateFromServiceWorker}
@@ -1362,6 +1377,7 @@ function App({
                                 onOpenCopyHistory={handleOpenCopyHistory}
                                 onDownloadSubtitleFilesAsSrt={handleDownloadSubtitleFilesAsSrt}
                                 onOpenSettings={handleOpenSettings}
+                                onOpenStatistics={handleOpenStatistics}
                                 lastError={lastError}
                                 onCopyLastError={handleCopyLastError}
                             />

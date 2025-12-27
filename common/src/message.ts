@@ -767,3 +767,54 @@ export interface DeleteCopyHistoryMessage extends MessageWithId {
 export interface ClearCopyHistoryMessage extends MessageWithId {
     readonly command: 'clear-copy-history';
 }
+
+// Watch Time Messages
+
+export interface SaveWatchTimeMessage extends MessageWithId {
+    readonly command: 'save-watch-time';
+    readonly record: {
+        readonly sessionId: string;
+        readonly timestamp: number;
+        readonly durationMs: number;
+        readonly languageCode: string;
+        readonly domain: string;
+        readonly videoUrl?: string;
+        readonly subtitleFileName?: string;
+    };
+}
+
+export interface RequestWatchTimeStatsMessage extends MessageWithId {
+    readonly command: 'request-watch-time-stats';
+    readonly startDate: number;
+    readonly endDate: number;
+}
+
+export interface RequestWatchTimeStatsResponse {
+    readonly stats: {
+        readonly dailySummaries: Array<{
+            readonly date: string;
+            readonly totalMs: number;
+            readonly languageBreakdown: Record<string, number>;
+            readonly sessionCount: number;
+        }>;
+        readonly totalAllTimeMs: number;
+        readonly currentStreak: number;
+        readonly longestStreak: number;
+        readonly averagePerDayMs: number;
+        readonly totalSessions: number;
+        readonly languageBreakdown: Record<string, number>;
+    };
+}
+
+export interface ClearWatchTimeMessage extends MessageWithId {
+    readonly command: 'clear-watch-time';
+}
+
+export interface DeleteOldWatchTimeMessage extends MessageWithId {
+    readonly command: 'delete-old-watch-time';
+    readonly olderThanTimestamp: number;
+}
+
+export interface DeleteOldWatchTimeResponse {
+    readonly deletedCount: number;
+}

@@ -29,6 +29,8 @@ export interface MiscSettings {
     readonly lastSelectedAnkiExportMode: AnkiExportMode;
     readonly tabName: string;
     readonly pauseOnHoverMode: PauseOnHoverMode;
+    readonly watchTimeTrackingEnabled: boolean;
+    readonly watchTimeRetentionDays: number;
 }
 
 /*

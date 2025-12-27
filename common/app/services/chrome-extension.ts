@@ -29,6 +29,9 @@ import {
     ClearCopyHistoryMessage,
     SetGlobalStateMessage,
     GetGlobalStateMessage,
+    RequestWatchTimeStatsMessage,
+    RequestWatchTimeStatsResponse,
+    ClearWatchTimeMessage,
 } from '@project/common';
 import { AsbplayerSettings, PageSettings, Profile, SettingsFormPageConfig } from '@project/common/settings';
 import { GlobalState } from '@project/common/global-state';
@@ -385,6 +388,34 @@ export default class ChromeExtension {
             sender: 'asbplayerv2',
             message: {
                 command: 'clear-copy-history',
+                messageId,
+            },
+        };
+        window.postMessage(command);
+        return this._createResponsePromise(messageId) as Promise<void>;
+    }
+
+    requestWatchTimeStats(startDate: number, endDate: number): Promise<RequestWatchTimeStatsResponse> {
+        const messageId = uuidv4();
+        const command: AsbPlayerCommand<RequestWatchTimeStatsMessage> = {
+            sender: 'asbplayerv2',
+            message: {
+                command: 'request-watch-time-stats',
+                startDate,
+                endDate,
+                messageId,
+            },
+        };
+        window.postMessage(command);
+        return this._createResponsePromise(messageId) as Promise<RequestWatchTimeStatsResponse>;
+    }
+
+    clearWatchTime(): Promise<void> {
+        const messageId = uuidv4();
+        const command: AsbPlayerCommand<ClearWatchTimeMessage> = {
+            sender: 'asbplayerv2',
+            message: {
+                command: 'clear-watch-time',
                 messageId,
             },
         };

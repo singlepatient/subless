@@ -77,6 +77,7 @@ import KeyBindings from './key-bindings';
 import { shouldShowUpdateAlert } from './update-alert';
 import { bufferToBase64 } from '@project/common/base64';
 import { pgsParserWorkerFactory } from './pgs-parser-worker-factory';
+import { WatchTimeTracker } from './watch-time-tracker';
 
 let netflix = false;
 document.addEventListener('asbplayer-netflix-enabled', (e) => {
@@ -143,6 +144,7 @@ export default class Binding {
     readonly settings: SettingsProvider;
     private readonly _audioRecorder = new AudioRecorder();
     readonly bulkExportController: BulkExportController;
+    private readonly _watchTimeTracker: WatchTimeTracker;
 
     private copyToClipboardOnMine: boolean;
     private takeScreenshot: boolean;
@@ -195,6 +197,13 @@ export default class Binding {
         this.subtitleController.onOffsetChange = () => this.mobileVideoOverlayController.updateModel();
         this.mobileGestureController = new MobileGestureController(this);
         this.bulkExportController = new BulkExportController(this);
+        this._watchTimeTracker = new WatchTimeTracker({
+            video,
+            settings: this.settings,
+            getSubtitleCount: () => this.subtitleController.subtitles.length,
+            getSubtitleFileName: () => this.subtitleFileName(),
+            getVideoSrc: () => this.video.src,
+        });
         this.recordMedia = true;
         this.takeScreenshot = true;
         this.cleanScreenshot = true;
@@ -429,6 +438,7 @@ export default class Binding {
         this.dragController.bind(this);
         this.mobileGestureController.bind();
         this.bulkExportController.bind();
+        this._watchTimeTracker.bind();
 
         const seek = (forward: boolean) => {
             const subtitle = adjacentSubtitle(
@@ -1047,6 +1057,7 @@ export default class Binding {
         this.mobileGestureController.unbind();
         this.notificationController.unbind();
         this.bulkExportController.unbind();
+        this._watchTimeTracker.unbind();
         this.subscribed = false;
 
         const command: VideoToExtensionCommand<VideoDisappearedMessage> = {
@@ -1444,6 +1455,13 @@ export default class Binding {
             this.playMode = PlayMode.normal;
         }
 
+        // Notify watch time tracker when subtitles are loaded
+        if (subtitles.length > 0 && subtitleFileNames.length > 0) {
+            this._watchTimeTracker.onSubtitlesLoaded();
+        } else {
+            this._watchTimeTracker.onSubtitlesUnloaded();
+        }
+
         let nonEmptyTrackIndex: number[] = [];
         for (let i = 0; i < subtitles.length; i++) {
             if (!nonEmptyTrackIndex.includes(subtitles[i].track)) {
@@ -1486,6 +1504,7 @@ export default class Binding {
         this._synced = false;
         this._syncedTimestamp = undefined;
         this.mobileVideoOverlayController.disposeOverlay();
+        this._watchTimeTracker.onSubtitlesUnloaded();
     }
 
     private _captureStream(): Promise<MediaStream> {

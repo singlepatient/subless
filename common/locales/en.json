@@ -26,7 +26,14 @@
         "increaseOffsetButton": "Increase offset to so that previous subtitle is at current position. Hold to increase by 100ms.",
         "gotIt": "Got it",
         "revert": "Revert",
-        "userGuide": "User guide"
+        "userGuide": "User guide",
+        "clearWatchTimeData": "Clear All Watch Time Data",
+        "clearing": "Clearing...",
+        "clear": "Clear"
+    },
+    "dialog": {
+        "clearWatchTimeTitle": "Clear Watch Time Data?",
+        "clearWatchTimeContent": "This will permanently delete all your watch time history. This action cannot be undone."
     },
     "about": {
         "title": "About asbplayer",
@@ -92,6 +99,7 @@
         "help": "Help",
         "miningHistory": "Mining History",
         "settings": "Settings",
+        "statistics": "Statistics",
         "submitIssue": "Submit Issue",
         "copyLastError": "Copy Last Error"
     },
@@ -490,7 +498,14 @@
         "dictionaryTokenStatus0": "Uncollected",
         "ui": "UI",
         "webSocketInterface": "WebSocket interface",
-        "yomitanHelperText": "Instructions to setup Yomitan API are <0>here<0>."
+        "yomitanHelperText": "Instructions to setup Yomitan API are <0>here<0>.",
+        "watchTime": "Statistics",
+        "watchTimeTracking": "Watch Time Tracking",
+        "watchTimeTrackingEnabled": "Track watch time",
+        "watchTimeRetentionDays": "Data retention (days)",
+        "watchTimeRetentionDaysHelp": "How long to keep watch time records. Older records are automatically deleted.",
+        "statistics": "Statistics",
+        "dataManagement": "Data Management"
     },
     "subtitlePlayer": {
         "multiSubtitleSelectHelp": "Click, hold, and drag to mine multiple subtitles"

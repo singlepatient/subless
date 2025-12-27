@@ -8,6 +8,7 @@ import FavoriteIcon from '@mui/icons-material/Favorite';
 import TutorialIcon from '@project/common/components/TutorialIcon';
 import IconButton from '@mui/material/IconButton';
 import HistoryIcon from '@mui/icons-material/History';
+import InsightsIcon from '@mui/icons-material/Insights';
 import SaveAltIcon from '@mui/icons-material/SaveAlt';
 import SettingsIcon from '@mui/icons-material/Settings';
 import Toolbar from '@mui/material/Toolbar';
@@ -36,6 +37,7 @@ interface BarProps {
     onDownloadSubtitleFilesAsSrt: () => void;
     onOpenSettings: () => void;
     onOpenCopyHistory: () => void;
+    onOpenStatistics: () => void;
     onCopyLastError: (error: string) => void;
 }
 
@@ -128,6 +130,7 @@ export default function Bar({
     lastError,
     onOpenSettings,
     onOpenCopyHistory,
+    onOpenStatistics,
     onDownloadSubtitleFilesAsSrt,
     onCopyLastError,
 }: BarProps) {
@@ -194,6 +197,11 @@ export default function Bar({
                     <IconButton edge="end" color="inherit" onClick={handleMenuOpen}>
                         <GitHubIcon />
                     </IconButton>
+                    <Tooltip title={t('bar.statistics')!}>
+                        <IconButton edge="end" color="inherit" onClick={onOpenStatistics}>
+                            <InsightsIcon />
+                        </IconButton>
+                    </Tooltip>
                     <Tooltip title={t('bar.settings')!}>
                         <IconButton edge="end" color="inherit" onClick={onOpenSettings}>
                             <SettingsIcon />
