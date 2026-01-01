@@ -1,11 +1,13 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import Grid, { GridProps } from '@mui/material/Grid';
 import IconButton from '@mui/material/IconButton';
+import Badge from '@mui/material/Badge';
 import NoteAddIcon from '@mui/icons-material/NoteAdd';
 import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 import TuneIcon from '@mui/icons-material/Tune';
+import SchoolIcon from '@mui/icons-material/School';
 import { ControlType, MobileOverlayModel, PlayMode, PostMineAction } from '@project/common';
 import { makeStyles } from '@mui/styles';
 import { useTranslation } from 'react-i18next';
@@ -28,6 +30,17 @@ const useStyles = makeStyles(({ anchor }: { anchor: Anchor }) => ({
     },
     recordingButton: {
         color: 'red',
+    },
+    studyModeButton: {
+        color: '#4CAF50',
+    },
+    studyModeBadge: {
+        '& .MuiBadge-badge': {
+            backgroundColor: '#4CAF50',
+            color: 'white',
+            fontWeight: 'bold',
+            fontSize: '0.7rem',
+        },
     },
     container: {
         display: 'inline-flex',
@@ -419,6 +432,23 @@ const MobileVideoOverlay = React.forwardRef<HTMLDivElement, Props>(function Mobi
                         )}
                     </Tooltip>
                 </Grid>
+                {model.studyModeEnabled && (
+                    <Grid item>
+                        <Tooltip {...defaultTooltipProps} title={`${t('info.studyModeEnabled')} - ${model.studyModeLinesUntilTest ?? '?'} lines until test`}>
+                            <span>
+                                <IconButton disabled>
+                                    <Badge 
+                                        badgeContent={model.studyModeLinesUntilTest ?? '?'} 
+                                        className={classes.studyModeBadge}
+                                        max={999}
+                                    >
+                                        <SchoolIcon className={classes.studyModeButton} />
+                                    </Badge>
+                                </IconButton>
+                            </span>
+                        </Tooltip>
+                    </Grid>
+                )}
                 {!model.emptySubtitleTrack && (
                     <Grid item>
                         <Tooltip {...defaultTooltipProps} title={t('binds.toggleSubtitles')!}>

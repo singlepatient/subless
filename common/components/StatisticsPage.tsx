@@ -48,6 +48,12 @@ interface StatisticsPageProps {
     onClose: () => void;
 }
 
+interface StatisticsContentProps {
+    extension?: ChromeExtension;
+    /** If true, skip the "extension required" check (for use inside extension context) */
+    insideExtension?: boolean;
+}
+
 /**
  * Format milliseconds as a human-readable duration.
  */
@@ -108,17 +114,21 @@ const StatCard: React.FC<StatCardProps> = ({ icon, label, value, subValue }) => 
     );
 };
 
-const StatisticsPage: React.FC<StatisticsPageProps> = ({ extension, open, onClose }) => {
+/**
+ * Standalone statistics content component that can be used in both
+ * dialog and full-page contexts.
+ */
+export const StatisticsContent: React.FC<StatisticsContentProps> = ({ extension, insideExtension = false }) => {
     const { t } = useTranslation();
     const theme = useTheme();
     const [timeRange, setTimeRange] = useState<TimeRange>('year');
     const [clearDialogOpen, setClearDialogOpen] = useState(false);
     const [clearing, setClearing] = useState(false);
 
-    const { stats, loading, refetch, clearStats } = useWatchTimeStats({
+    const { stats, loading, clearStats } = useWatchTimeStats({
         days: TIME_RANGE_DAYS[timeRange],
         extension,
-        autoFetch: open,
+        autoFetch: true,
     });
 
     const handleClearData = async () => {
@@ -173,213 +183,197 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ extension, open, onClos
             .map(([lang, ms]) => ({ lang, ms, duration: formatDuration(ms, true) }));
     }, [stats?.languageBreakdown]);
 
-    const extensionNotInstalled = !extension?.installed;
+    // Only show extension required message if we're in app context (not inside extension)
+    const extensionNotInstalled = !insideExtension && !extension?.installed;
 
-    const renderContent = () => {
-        if (extensionNotInstalled) {
-            return (
-                <Box sx={{ textAlign: 'center', py: 8 }}>
-                    <PlayCircleOutlineIcon sx={{ fontSize: 64, color: theme.palette.text.secondary, mb: 2 }} />
-                    <Typography variant="h6" gutterBottom>
-                        {t('statistics.extensionRequired', 'Extension Required')}
-                    </Typography>
-                    <Typography color="text.secondary" sx={{ maxWidth: 400, mx: 'auto' }}>
-                        {t(
-                            'statistics.extensionRequiredDescription',
-                            'Install the asbplayer browser extension to track your watch time. Your statistics will appear here automatically as you watch videos with subtitles.'
-                        )}
-                    </Typography>
-                </Box>
-            );
-        }
-
-        if (loading) {
-            return (
-                <Box>
-                    <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap sx={{ mb: 3 }}>
-                        {[1, 2, 3, 4].map((i) => (
-                            <Paper key={i} variant="outlined" sx={{ p: 2, flex: '1 1 200px', minWidth: 150 }}>
-                                <Skeleton variant="circular" width={24} height={24} sx={{ mx: 'auto', mb: 1 }} />
-                                <Skeleton variant="text" width="60%" sx={{ mx: 'auto' }} />
-                                <Skeleton variant="text" width="80%" sx={{ mx: 'auto' }} />
-                            </Paper>
-                        ))}
-                    </Stack>
-                    <Skeleton variant="rectangular" height={200} sx={{ borderRadius: 1 }} />
-                </Box>
-            );
-        }
-
-        if (!stats || stats.totalAllTimeMs === 0) {
-            return (
-                <Box sx={{ textAlign: 'center', py: 8 }}>
-                    <PlayCircleOutlineIcon sx={{ fontSize: 64, color: theme.palette.text.secondary, mb: 2 }} />
-                    <Typography variant="h6" gutterBottom>
-                        {t('statistics.noData', 'No Watch Time Data Yet')}
-                    </Typography>
-                    <Typography color="text.secondary" sx={{ maxWidth: 400, mx: 'auto' }}>
-                        {t(
-                            'statistics.noDataDescription',
-                            'Start watching videos with subtitles to track your progress! Your activity will appear here as you learn.'
-                        )}
-                    </Typography>
-                </Box>
-            );
-        }
-
+    if (extensionNotInstalled) {
         return (
-            <>
-                {/* Time range selector */}
-                <Box sx={{ mb: 3, display: 'flex', justifyContent: 'center' }}>
-                    <ButtonGroup variant="outlined" size="small">
-                        <Button
-                            variant={timeRange === 'week' ? 'contained' : 'outlined'}
-                            onClick={() => setTimeRange('week')}
-                        >
-                            {t('statistics.week', 'Week')}
-                        </Button>
-                        <Button
-                            variant={timeRange === 'month' ? 'contained' : 'outlined'}
-                            onClick={() => setTimeRange('month')}
-                        >
-                            {t('statistics.month', 'Month')}
-                        </Button>
-                        <Button
-                            variant={timeRange === 'quarter' ? 'contained' : 'outlined'}
-                            onClick={() => setTimeRange('quarter')}
-                        >
-                            {t('statistics.quarter', '3 Months')}
-                        </Button>
-                        <Button
-                            variant={timeRange === 'year' ? 'contained' : 'outlined'}
-                            onClick={() => setTimeRange('year')}
-                        >
-                            {t('statistics.year', 'Year')}
-                        </Button>
-                        <Button
-                            variant={timeRange === 'all' ? 'contained' : 'outlined'}
-                            onClick={() => setTimeRange('all')}
-                        >
-                            {t('statistics.all', 'All Time')}
-                        </Button>
-                    </ButtonGroup>
-                </Box>
-
-                {/* Stats cards */}
-                <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap sx={{ mb: 3 }}>
-                    <StatCard
-                        icon={<AccessTimeIcon />}
-                        label={t('statistics.totalWatchTime', 'Watch Time')}
-                        value={formatDuration(rangeStats.totalMs, true)}
-                        subValue={`${rangeStats.daysActive} ${t('statistics.activeDays', 'active days')}`}
-                    />
-                    <StatCard
-                        icon={<LocalFireDepartmentIcon />}
-                        label={t('statistics.currentStreak', 'Current Streak')}
-                        value={`${stats.currentStreak} ${t('statistics.days', 'days')}`}
-                        subValue={
-                            stats.longestStreak > stats.currentStreak
-                                ? `${t('statistics.best', 'Best')}: ${stats.longestStreak} ${t('statistics.days', 'days')}`
-                                : undefined
-                        }
-                    />
-                    <StatCard
-                        icon={<TrendingUpIcon />}
-                        label={t('statistics.dailyAverage', 'Daily Average')}
-                        value={formatDuration(rangeStats.avgPerDay, true)}
-                        subValue={t('statistics.onActiveDays', 'on active days')}
-                    />
-                    <StatCard
-                        icon={<CalendarTodayIcon />}
-                        label={t('statistics.longestStreak', 'Longest Streak')}
-                        value={`${stats.longestStreak} ${t('statistics.days', 'days')}`}
-                    />
-                </Stack>
-
-                {/* Activity grid */}
-                <Paper variant="outlined" sx={{ p: 2, mb: 3, overflow: 'auto' }}>
-                    <Typography variant="subtitle2" sx={{ mb: 2 }}>
-                        {t('statistics.activityHistory', 'Activity History')}
-                    </Typography>
-                    <ActivityHistoryGrid
-                        dailySummaries={filteredSummaries}
-                        weeks={TIME_RANGE_GRID_WEEKS[timeRange]}
-                    />
-                </Paper>
-
-                {/* Language breakdown */}
-                {topLanguages.length > 0 && (
-                    <Paper variant="outlined" sx={{ p: 2, mb: 3 }}>
-                        <Typography variant="subtitle2" sx={{ mb: 2 }}>
-                            {t('statistics.topLanguages', 'Top Languages')}
-                        </Typography>
-                        <Stack spacing={1}>
-                            {topLanguages.map(({ lang, ms, duration }) => {
-                                const percentage = stats.totalAllTimeMs > 0 ? (ms / stats.totalAllTimeMs) * 100 : 0;
-                                return (
-                                    <Box key={lang}>
-                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                                            <Typography variant="body2" fontWeight="medium">
-                                                {lang.toUpperCase()}
-                                            </Typography>
-                                            <Typography variant="body2" color="text.secondary">
-                                                {duration}
-                                            </Typography>
-                                        </Box>
-                                        <Box
-                                            sx={{
-                                                height: 8,
-                                                borderRadius: 1,
-                                                backgroundColor: theme.palette.action.hover,
-                                                overflow: 'hidden',
-                                            }}
-                                        >
-                                            <Box
-                                                sx={{
-                                                    height: '100%',
-                                                    width: `${percentage}%`,
-                                                    backgroundColor: theme.palette.primary.main,
-                                                    borderRadius: 1,
-                                                }}
-                                            />
-                                        </Box>
-                                    </Box>
-                                );
-                            })}
-                        </Stack>
-                    </Paper>
-                )}
-
-                {/* Clear data button */}
-                <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-                    <Button
-                        variant="outlined"
-                        color="error"
-                        size="small"
-                        onClick={() => setClearDialogOpen(true)}
-                        disabled={clearing}
-                    >
-                        {t('action.clearWatchTimeData', 'Clear All Data')}
-                    </Button>
-                </Box>
-            </>
+            <Box sx={{ textAlign: 'center', py: 8 }}>
+                <PlayCircleOutlineIcon sx={{ fontSize: 64, color: theme.palette.text.secondary, mb: 2 }} />
+                <Typography variant="h6" gutterBottom>
+                    {t('statistics.extensionRequired', 'Extension Required')}
+                </Typography>
+                <Typography color="text.secondary" sx={{ maxWidth: 400, mx: 'auto' }}>
+                    {t(
+                        'statistics.extensionRequiredDescription',
+                        'Install the asbplayer browser extension to track your watch time. Your statistics will appear here automatically as you watch videos with subtitles.'
+                    )}
+                </Typography>
+            </Box>
         );
-    };
+    }
+
+    if (loading) {
+        return (
+            <Box>
+                <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap sx={{ mb: 3 }}>
+                    {[1, 2, 3, 4].map((i) => (
+                        <Paper key={i} variant="outlined" sx={{ p: 2, flex: '1 1 200px', minWidth: 150 }}>
+                            <Skeleton variant="circular" width={24} height={24} sx={{ mx: 'auto', mb: 1 }} />
+                            <Skeleton variant="text" width="60%" sx={{ mx: 'auto' }} />
+                            <Skeleton variant="text" width="80%" sx={{ mx: 'auto' }} />
+                        </Paper>
+                    ))}
+                </Stack>
+                <Skeleton variant="rectangular" height={200} sx={{ borderRadius: 1 }} />
+            </Box>
+        );
+    }
+
+    if (!stats || stats.totalAllTimeMs === 0) {
+        return (
+            <Box sx={{ textAlign: 'center', py: 8 }}>
+                <PlayCircleOutlineIcon sx={{ fontSize: 64, color: theme.palette.text.secondary, mb: 2 }} />
+                <Typography variant="h6" gutterBottom>
+                    {t('statistics.noData', 'No Watch Time Data Yet')}
+                </Typography>
+                <Typography color="text.secondary" sx={{ maxWidth: 400, mx: 'auto' }}>
+                    {t(
+                        'statistics.noDataDescription',
+                        'Start watching videos with subtitles to track your progress! Your activity will appear here as you learn.'
+                    )}
+                </Typography>
+            </Box>
+        );
+    }
 
     return (
         <>
-            <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-                <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    {t('statistics.title', 'Watch Time Statistics')}
-                    <IconButton onClick={onClose} size="small">
-                        <CloseIcon />
-                    </IconButton>
-                </DialogTitle>
-                <DialogContent dividers sx={{ minHeight: 400 }}>
-                    {renderContent()}
-                </DialogContent>
-            </Dialog>
+            {/* Time range selector */}
+            <Box sx={{ mb: 3, display: 'flex', justifyContent: 'center' }}>
+                <ButtonGroup variant="outlined" size="small">
+                    <Button
+                        variant={timeRange === 'week' ? 'contained' : 'outlined'}
+                        onClick={() => setTimeRange('week')}
+                    >
+                        {t('statistics.week', 'Week')}
+                    </Button>
+                    <Button
+                        variant={timeRange === 'month' ? 'contained' : 'outlined'}
+                        onClick={() => setTimeRange('month')}
+                    >
+                        {t('statistics.month', 'Month')}
+                    </Button>
+                    <Button
+                        variant={timeRange === 'quarter' ? 'contained' : 'outlined'}
+                        onClick={() => setTimeRange('quarter')}
+                    >
+                        {t('statistics.quarter', '3 Months')}
+                    </Button>
+                    <Button
+                        variant={timeRange === 'year' ? 'contained' : 'outlined'}
+                        onClick={() => setTimeRange('year')}
+                    >
+                        {t('statistics.year', 'Year')}
+                    </Button>
+                    <Button
+                        variant={timeRange === 'all' ? 'contained' : 'outlined'}
+                        onClick={() => setTimeRange('all')}
+                    >
+                        {t('statistics.all', 'All Time')}
+                    </Button>
+                </ButtonGroup>
+            </Box>
 
+            {/* Stats cards */}
+            <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap sx={{ mb: 3 }}>
+                <StatCard
+                    icon={<AccessTimeIcon />}
+                    label={t('statistics.totalWatchTime', 'Watch Time')}
+                    value={formatDuration(rangeStats.totalMs, true)}
+                    subValue={`${rangeStats.daysActive} ${t('statistics.activeDays', 'active days')}`}
+                />
+                <StatCard
+                    icon={<LocalFireDepartmentIcon />}
+                    label={t('statistics.currentStreak', 'Current Streak')}
+                    value={`${stats.currentStreak} ${t('statistics.days', 'days')}`}
+                    subValue={
+                        stats.longestStreak > stats.currentStreak
+                            ? `${t('statistics.best', 'Best')}: ${stats.longestStreak} ${t('statistics.days', 'days')}`
+                            : undefined
+                    }
+                />
+                <StatCard
+                    icon={<TrendingUpIcon />}
+                    label={t('statistics.dailyAverage', 'Daily Average')}
+                    value={formatDuration(rangeStats.avgPerDay, true)}
+                    subValue={t('statistics.onActiveDays', 'on active days')}
+                />
+                <StatCard
+                    icon={<CalendarTodayIcon />}
+                    label={t('statistics.longestStreak', 'Longest Streak')}
+                    value={`${stats.longestStreak} ${t('statistics.days', 'days')}`}
+                />
+            </Stack>
+
+            {/* Activity grid */}
+            <Paper variant="outlined" sx={{ p: 2, mb: 3, overflow: 'auto' }}>
+                <Typography variant="subtitle2" sx={{ mb: 2 }}>
+                    {t('statistics.activityHistory', 'Activity History')}
+                </Typography>
+                <ActivityHistoryGrid
+                    dailySummaries={filteredSummaries}
+                    weeks={TIME_RANGE_GRID_WEEKS[timeRange]}
+                />
+            </Paper>
+
+            {/* Language breakdown */}
+            {topLanguages.length > 0 && (
+                <Paper variant="outlined" sx={{ p: 2, mb: 3 }}>
+                    <Typography variant="subtitle2" sx={{ mb: 2 }}>
+                        {t('statistics.topLanguages', 'Top Languages')}
+                    </Typography>
+                    <Stack spacing={1}>
+                        {topLanguages.map(({ lang, ms, duration }) => {
+                            const percentage = stats.totalAllTimeMs > 0 ? (ms / stats.totalAllTimeMs) * 100 : 0;
+                            return (
+                                <Box key={lang}>
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                                        <Typography variant="body2" fontWeight="medium">
+                                            {lang.toUpperCase()}
+                                        </Typography>
+                                        <Typography variant="body2" color="text.secondary">
+                                            {duration}
+                                        </Typography>
+                                    </Box>
+                                    <Box
+                                        sx={{
+                                            height: 8,
+                                            borderRadius: 1,
+                                            backgroundColor: theme.palette.action.hover,
+                                            overflow: 'hidden',
+                                        }}
+                                    >
+                                        <Box
+                                            sx={{
+                                                height: '100%',
+                                                width: `${percentage}%`,
+                                                backgroundColor: theme.palette.primary.main,
+                                                borderRadius: 1,
+                                            }}
+                                        />
+                                    </Box>
+                                </Box>
+                            );
+                        })}
+                    </Stack>
+                </Paper>
+            )}
+
+            {/* Clear data button */}
+            <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                <Button
+                    variant="outlined"
+                    color="error"
+                    size="small"
+                    onClick={() => setClearDialogOpen(true)}
+                    disabled={clearing}
+                >
+                    {t('action.clearWatchTimeData', 'Clear All Data')}
+                </Button>
+            </Box>
+
+            {/* Clear confirmation dialog */}
             <Dialog open={clearDialogOpen} onClose={() => setClearDialogOpen(false)}>
                 <DialogTitle>{t('dialog.clearWatchTimeTitle', 'Clear Watch Time Data?')}</DialogTitle>
                 <DialogContent>
@@ -400,6 +394,27 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ extension, open, onClos
                 </DialogActions>
             </Dialog>
         </>
+    );
+};
+
+/**
+ * Statistics dialog component for use in the app.
+ */
+const StatisticsPage: React.FC<StatisticsPageProps> = ({ extension, open, onClose }) => {
+    const { t } = useTranslation();
+
+    return (
+        <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+            <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                {t('statistics.title', 'Watch Time Statistics')}
+                <IconButton onClick={onClose} size="small">
+                    <CloseIcon />
+                </IconButton>
+            </DialogTitle>
+            <DialogContent dividers sx={{ minHeight: 400 }}>
+                <StatisticsContent extension={extension} />
+            </DialogContent>
+        </Dialog>
     );
 };
 

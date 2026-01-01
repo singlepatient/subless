@@ -5,10 +5,12 @@ import { SettingsProvider } from '@project/common/settings';
 export default class ClearWatchTimeHandler {
     private readonly _settings: SettingsProvider;
     private readonly _repository: IndexedDBWatchTimeRepository;
+    private readonly _onAfterClear?: () => void;
 
-    constructor(settings: SettingsProvider) {
+    constructor(settings: SettingsProvider, onAfterClear?: () => void) {
         this._settings = settings;
         this._repository = new IndexedDBWatchTimeRepository();
+        this._onAfterClear = onAfterClear;
     }
 
     get sender() {
@@ -23,6 +25,7 @@ export default class ClearWatchTimeHandler {
         this._repository
             .clear()
             .then(() => {
+                this._onAfterClear?.();
                 sendResponse({});
             })
             .catch((e) => {

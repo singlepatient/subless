@@ -23,10 +23,19 @@
     "shortcutSelectSubtitleTrackDescription": {
         "message": "Select subtitle tracks to load."
     },
+    "shortcutOpenStatisticsDescription": {
+        "message": "Open watch time statistics page."
+    },
+    "shortcutToggleStudyModeDescription": {
+        "message": "Toggle study mode for cloze-deletion testing."
+    },
     "contextMenuMineSubtitle": {
         "message": "Mine Subtitle"
     },
     "contextMenuLoadSubtitles": {
         "message": "Load Subtitles"
+    },
+    "contextMenuViewStatistics": {
+        "message": "View Statistics"
     }
 }

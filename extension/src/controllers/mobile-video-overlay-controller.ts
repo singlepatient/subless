@@ -183,6 +183,8 @@ export class MobileVideoOverlayController {
             subtitlesAreVisible: streamingDisplaySubtitles,
             playMode: this._context.playMode,
             themeType,
+            studyModeEnabled: this._context.srsController.enabled,
+            studyModeLinesUntilTest: this._context.srsController.linesUntilTest,
         };
         return model;
     }

@@ -31,6 +31,9 @@ export interface MiscSettings {
     readonly pauseOnHoverMode: PauseOnHoverMode;
     readonly watchTimeTrackingEnabled: boolean;
     readonly watchTimeRetentionDays: number;
+    readonly showStreakBadge: boolean;
+    readonly studyModeEnabled: boolean;
+    readonly studyModeFrequency: number;
 }
 
 /*

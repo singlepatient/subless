@@ -82,6 +82,27 @@ export default defineContentScript({
 
         const bind = async () => {
             const bindings: Binding[] = [];
+            
+            // Expose bindings for debugging (accessible via browser console)
+            (window as any).__asbplayerBindings = bindings;
+            (window as any).__asbplayerDebug = () => {
+                const b = bindings[0];
+                if (!b) {
+                    console.log('No active binding found');
+                    return null;
+                }
+                return {
+                    srsController: {
+                        enabled: b.srsController.enabled,
+                        lineCount: b.srsController.lineCount,
+                        linesUntilTest: b.srsController.linesUntilTest,
+                        showing: b.srsController.showing,
+                    },
+                    subtitleCount: b.subtitleController.subtitles.length,
+                    binding: b,
+                };
+            };
+            
             const page = await currentPageDelegate();
             let hasPageScript = page?.config.pageScript !== undefined;
             let frameInfoListener: FrameInfoListener | undefined;

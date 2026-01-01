@@ -33,6 +33,7 @@ import {
     PostMineAction,
     TakeScreenshotMessage,
     ToggleRecordingMessage,
+    ToggleStudyModeMessage,
     ToggleVideoSelectMessage,
 } from '@project/common';
 import { SettingsProvider } from '@project/common/settings';
@@ -68,6 +69,7 @@ import EncodeMp3Handler from '@/handlers/video/encode-mp3-handler';
 import SaveWatchTimeHandler from '@/handlers/video/save-watch-time-handler';
 import RequestWatchTimeStatsHandler from '@/handlers/video/request-watch-time-stats-handler';
 import ClearWatchTimeHandler from '@/handlers/video/clear-watch-time-handler';
+import { IndexedDBWatchTimeRepository } from '@project/common/watch-time';
 
 export default defineBackground(() => {
     if (!isFirefoxBuild) {
@@ -75,9 +77,37 @@ export default defineBackground(() => {
     }
 
     const settings = new SettingsProvider(new ExtensionSettingsStorage());
+    const watchTimeRepository = new IndexedDBWatchTimeRepository();
+
+    // Update extension badge with current streak
+    const updateStatsBadge = async () => {
+        const action = browser.action || browser.browserAction;
+        if (!action) return;
+
+        try {
+            const showBadge = await settings.getSingle('showStreakBadge');
+            if (!showBadge) {
+                action.setBadgeText({ text: '' });
+                return;
+            }
+
+            const stats = await watchTimeRepository.getStats(365);
+            const streak = stats.currentStreak;
+
+            if (streak > 0) {
+                action.setBadgeText({ text: streak.toString() });
+                action.setBadgeBackgroundColor({ color: '#4CAF50' }); // Green
+            } else {
+                action.setBadgeText({ text: '' });
+            }
+        } catch (e) {
+            console.error('Failed to update stats badge:', e);
+        }
+    };
 
     const startListener = async () => {
         primeLocalization(await settings.getSingle('language'));
+        updateStatsBadge();
     };
 
     const installListener = async (details: Browser.runtime.InstalledDetails) => {
@@ -151,9 +181,9 @@ export default defineBackground(() => {
         new SaveCopyHistoryHandler(settings),
         new DeleteCopyHistoryHandler(settings),
         new ClearCopyHistoryHandler(settings),
-        new SaveWatchTimeHandler(settings),
+        new SaveWatchTimeHandler(settings, updateStatsBadge),
         new RequestWatchTimeStatsHandler(settings),
-        new ClearWatchTimeHandler(settings),
+        new ClearWatchTimeHandler(settings, updateStatsBadge),
         new PublishCardHandler(cardPublisher),
         new BulkExportCancellationHandler(cardPublisher),
         new BulkExportStartedHandler(cardPublisher),
@@ -205,6 +235,12 @@ export default defineBackground(() => {
             title: browser.i18n.getMessage('contextMenuMineSubtitle'),
             contexts: ['page', 'video'],
         });
+
+        browser.contextMenus?.create({
+            id: 'view-statistics',
+            title: browser.i18n.getMessage('contextMenuViewStatistics'),
+            contexts: ['page', 'video'],
+        });
     });
 
     browser.contextMenus?.onClicked.addListener((info) => {
@@ -242,6 +278,8 @@ export default defineBackground(() => {
                 };
                 return copySubtitleCommand;
             });
+        } else if (info.menuItemId === 'view-statistics') {
+            browser.tabs.create({ active: true, url: browser.runtime.getURL('/statistics-ui.html') });
         }
     });
 
@@ -377,6 +415,25 @@ export default defineBackground(() => {
                             };
                             return extensionToPlayerCommand;
                         },
+                    });
+                    break;
+                case 'open-statistics':
+                    browser.tabs.create({ active: true, url: browser.runtime.getURL('/statistics-ui.html') });
+                    break;
+                case 'toggle-study-mode':
+                    tabRegistry.publishCommandToVideoElements((videoElement) => {
+                        if (tabs.find((t) => t.id === videoElement.tab.id) === undefined) {
+                            return undefined;
+                        }
+
+                        const extensionToVideoCommand: ExtensionToVideoCommand<ToggleStudyModeMessage> = {
+                            sender: 'asbplayer-extension-to-video',
+                            message: {
+                                command: 'toggle-study-mode',
+                            },
+                            src: videoElement.src,
+                        };
+                        return extensionToVideoCommand;
                     });
                     break;
                 default:

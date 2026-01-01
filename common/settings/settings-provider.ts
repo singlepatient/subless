@@ -200,6 +200,9 @@ export const defaultSettings: AsbplayerSettings = {
     lastSelectedAnkiExportMode: 'default',
     watchTimeTrackingEnabled: true,
     watchTimeRetentionDays: 365,
+    showStreakBadge: true,
+    studyModeEnabled: false,
+    studyModeFrequency: 3,
     dictionaryTracks: [defaultDictionaryTrackSettings, defaultDictionaryTrackSettings, defaultDictionaryTrackSettings],
 };
 

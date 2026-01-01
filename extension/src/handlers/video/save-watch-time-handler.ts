@@ -5,10 +5,12 @@ import { SettingsProvider } from '@project/common/settings';
 export default class SaveWatchTimeHandler {
     private readonly _settings: SettingsProvider;
     private readonly _repository: IndexedDBWatchTimeRepository;
+    private readonly _onAfterSave?: () => void;
 
-    constructor(settings: SettingsProvider) {
+    constructor(settings: SettingsProvider, onAfterSave?: () => void) {
         this._settings = settings;
         this._repository = new IndexedDBWatchTimeRepository();
+        this._onAfterSave = onAfterSave;
     }
 
     get sender() {
@@ -45,6 +47,9 @@ export default class SaveWatchTimeHandler {
                 const retentionMs = watchTimeRetentionDays * 24 * 60 * 60 * 1000;
                 const cutoffTimestamp = Date.now() - retentionMs;
                 await this._repository.deleteOlderThan(cutoffTimestamp);
+
+                // Notify after save
+                this._onAfterSave?.();
 
                 sendResponse({});
             })

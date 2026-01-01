@@ -89,6 +89,7 @@ export default defineConfig({
                         'video-data-sync-ui.js',
                         'video-select-ui.js',
                         'notification-ui.js',
+                        'study-test-ui.js',
                         'mobile-video-overlay-ui.html',
                         'page-favicons/*',
                     ],
@@ -134,6 +135,12 @@ export default defineConfig({
             },
             'toggle-recording': {
                 description: '__MSG_shortcutToggleRecordingDescription__',
+            },
+            'open-statistics': {
+                description: '__MSG_shortcutOpenStatisticsDescription__',
+            },
+            'toggle-study-mode': {
+                description: '__MSG_shortcutToggleStudyModeDescription__',
             },
         };
 

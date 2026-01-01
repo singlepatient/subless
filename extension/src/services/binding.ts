@@ -68,6 +68,7 @@ import NotificationController from '../controllers/notification-controller';
 import SubtitleController from '../controllers/subtitle-controller';
 import BulkExportController from '../controllers/bulk-export-controller';
 import VideoDataSyncController from '../controllers/video-data-sync-controller';
+import SrsController from '../controllers/srs-controller';
 import AudioRecorder, { TimedRecordingInProgressError } from './audio-recorder';
 import { isMobile } from '@project/common/device-detection/mobile';
 import { OffsetAnchor } from './element-overlay';
@@ -144,6 +145,7 @@ export default class Binding {
     readonly settings: SettingsProvider;
     private readonly _audioRecorder = new AudioRecorder();
     readonly bulkExportController: BulkExportController;
+    readonly srsController: SrsController;
     private readonly _watchTimeTracker: WatchTimeTracker;
 
     private copyToClipboardOnMine: boolean;
@@ -197,6 +199,7 @@ export default class Binding {
         this.subtitleController.onOffsetChange = () => this.mobileVideoOverlayController.updateModel();
         this.mobileGestureController = new MobileGestureController(this);
         this.bulkExportController = new BulkExportController(this);
+        this.srsController = new SrsController(this);
         this._watchTimeTracker = new WatchTimeTracker({
             video,
             settings: this.settings,
@@ -268,7 +271,7 @@ export default class Binding {
         // Enable new play mode
         switch (newPlayMode) {
             case PlayMode.autoPause:
-                this.subtitleController.autoPauseContext.onStartedShowing = () => {
+                this.subtitleController.autoPauseContext.onStartedShowing = (_subtitle) => {
                     if (this.recordingMedia || this.autoPausePreference !== AutoPausePreference.atStart) {
                         return;
                     }
@@ -439,6 +442,17 @@ export default class Binding {
         this.mobileGestureController.bind();
         this.bulkExportController.bind();
         this._watchTimeTracker.bind();
+
+        // Hook SRS controller to subtitle display
+        // Don't pause here - SRS controller handles pausing at subtitle END via _pauseAtSubtitleEnd()
+        this.subtitleController.onSubtitleStarted = async (subtitle) => {
+            await this.srsController.onSubtitleShown(subtitle);
+        };
+
+        // Allow SRS controller to suppress subtitle display for test lines
+        this.subtitleController.isTestLine = (subtitleIndex) => {
+            return this.srsController.isTestLine(subtitleIndex);
+        };
 
         const seek = (forward: boolean) => {
             const subtitle = adjacentSubtitle(
@@ -712,6 +726,14 @@ export default class Binding {
                             this._toggleRecordingMedia(PostMineAction.showAnkiDialog);
                             this.mobileVideoOverlayController.updateModel();
                         }
+                        break;
+                    case 'toggle-study-mode':
+                        this.srsController.enabled = !this.srsController.enabled;
+                        this.settings.set({ studyModeEnabled: this.srsController.enabled });
+                        this.subtitleController.notification(
+                            this.srsController.enabled ? 'info.studyModeEnabled' : 'info.studyModeDisabled'
+                        );
+                        this.mobileVideoOverlayController.updateModel();
                         break;
                     case 'card-updated':
                     case 'card-exported':
@@ -1000,6 +1022,8 @@ export default class Binding {
             this.mobileVideoOverlayController.unbind();
         }
 
+        await this.srsController.updateSettings();
+        this.srsController.bind();
         await i18nInit(currentSettings.language);
     }
 
@@ -1058,6 +1082,7 @@ export default class Binding {
         this.notificationController.unbind();
         this.bulkExportController.unbind();
         this._watchTimeTracker.unbind();
+        this.srsController.unbind();
         this.subscribed = false;
 
         const command: VideoToExtensionCommand<VideoDisappearedMessage> = {

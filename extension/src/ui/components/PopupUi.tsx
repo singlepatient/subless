@@ -69,6 +69,10 @@ export function PopupUi({ commands }: Props) {
         browser.tabs.create({ active: true, url: 'https://docs.asbplayer.dev/docs/intro' });
     }, []);
 
+    const handleOpenStatistics = useCallback(() => {
+        browser.tabs.create({ active: true, url: browser.runtime.getURL('/statistics-ui.html') });
+    }, []);
+
     const { requestingActiveTabPermission, tabRequestingActiveTabPermission } = useRequestingActiveTabPermission();
 
     useEffect(() => {
@@ -119,6 +123,7 @@ export function PopupUi({ commands }: Props) {
                             onSettingsChanged={handleSettingsChanged}
                             onOpenApp={handleOpenApp}
                             onOpenSidePanel={handleOpenSidePanel}
+                            onOpenStatistics={handleOpenStatistics}
                             onOpenExtensionShortcuts={handleOpenExtensionShortcuts}
                             onOpenUserGuide={handleOpenUserGuide}
                             {...profilesContext}

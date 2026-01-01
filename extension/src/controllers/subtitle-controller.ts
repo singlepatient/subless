@@ -105,6 +105,8 @@ export default class SubtitleController {
     onSlice?: (subtitle: SubtitleSlice<IndexedSubtitleModel>) => void;
     onOffsetChange?: () => void;
     onMouseOver?: (event: MouseEvent) => void;
+    onSubtitleStarted?: (subtitle: SubtitleModel) => void;
+    isTestLine?: (subtitleIndex: number) => boolean;
 
     constructor(video: HTMLMediaElement, settings: SettingsProvider) {
         this.video = video;
@@ -384,7 +386,9 @@ export default class SubtitleController {
             }
 
             if (slice.startedShowing && this._trackEnabled(slice.startedShowing)) {
+                console.log('[SubtitleController] Subtitle started showing:', slice.startedShowing.text.substring(0, 50));
                 this.autoPauseContext.startedShowing(slice.startedShowing);
+                this.onSubtitleStarted?.(slice.startedShowing);
             }
 
             if (slice.nextToShow && slice.nextToShow.length > 0) {
@@ -482,7 +486,10 @@ export default class SubtitleController {
     }
 
     private _findShowingSubtitles(slice: SubtitleSlice<IndexedSubtitleModel>): IndexedSubtitleModel[] {
-        return slice.showing.filter((s) => this._trackEnabled(s)).sort((s1, s2) => s1.track - s2.track);
+        return slice.showing
+            .filter((s) => this._trackEnabled(s))
+            .filter((s) => !this.isTestLine?.(s.index)) // Filter out test lines to prevent flash
+            .sort((s1, s2) => s1.track - s2.track);
     }
 
     private _trackEnabled(subtitle: SubtitleModel) {

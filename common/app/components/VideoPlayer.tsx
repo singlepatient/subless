@@ -421,7 +421,7 @@ export default function VideoPlayer({
 
     const autoPauseContext = useMemo(() => {
         const context = new AutoPauseContext();
-        context.onStartedShowing = () => {
+        context.onStartedShowing = (_subtitle) => {
             if (playMode !== PlayMode.autoPause || miscSettings.autoPausePreference !== AutoPausePreference.atStart) {
                 return;
             }

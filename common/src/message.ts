@@ -249,6 +249,10 @@ export interface ToggleRecordingMessage extends Message {
     readonly command: 'toggle-recording';
 }
 
+export interface ToggleStudyModeMessage extends Message {
+    readonly command: 'toggle-study-mode';
+}
+
 export interface SubtitleFile {
     base64: string;
     name: string;

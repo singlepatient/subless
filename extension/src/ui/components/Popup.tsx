@@ -4,6 +4,7 @@ import { AsbplayerSettings, Profile, chromeCommandBindsToKeyBinds } from '@proje
 import SettingsForm from '@project/common/components/SettingsForm';
 import PanelIcon from '@project/common/components/PanelIcon';
 import LaunchIcon from '@mui/icons-material/Launch';
+import InsightsIcon from '@mui/icons-material/Insights';
 import { useCallback, useMemo } from 'react';
 import Button from '@mui/material/Button';
 import ButtonGroup from '@mui/material/ButtonGroup';
@@ -28,6 +29,7 @@ interface Props {
     onSettingsChanged: (settings: Partial<AsbplayerSettings>) => void;
     onOpenApp: () => void;
     onOpenSidePanel: () => void;
+    onOpenStatistics: () => void;
     onOpenExtensionShortcuts: () => void;
     onOpenUserGuide: () => void;
     profiles: Profile[];
@@ -57,6 +59,7 @@ const Popup = ({
     commands,
     onOpenApp,
     onOpenSidePanel,
+    onOpenStatistics,
     onSettingsChanged,
     onOpenExtensionShortcuts,
     onOpenUserGuide,
@@ -91,6 +94,9 @@ const Popup = ({
                             {t('action.openSidePanel')}
                         </Button>
                     )}
+                    <Button variant="contained" color="primary" startIcon={<InsightsIcon />} onClick={onOpenStatistics}>
+                        {t('action.statistics')}
+                    </Button>
                     <Button variant="contained" color="primary" startIcon={<TutorialIcon />} onClick={onOpenUserGuide}>
                         {t('action.userGuide')}
                     </Button>

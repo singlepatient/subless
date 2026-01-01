@@ -38,6 +38,7 @@ export default class UiFrame {
     private _language: string = 'en';
     private _dirty = true;
     private _bound = false;
+    private _className: string | undefined;
 
     constructor(html: (lang: string) => Promise<string>) {
         this._html = html;
@@ -72,7 +73,8 @@ export default class UiFrame {
         return this._client;
     }
 
-    async bind(): Promise<boolean> {
+    async bind(options?: { className?: string }): Promise<boolean> {
+        this._className = options?.className;
         return await this._init();
     }
 
@@ -98,6 +100,12 @@ export default class UiFrame {
         this._frame.setAttribute('allowtransparency', 'true');
 
         this._client = new FrameBridgeClient(this._frame, this._fetchOptions);
+        
+        // Apply custom className if provided
+        if (this._className) {
+            this._frame.className = this._className;
+        }
+        
         document.body.appendChild(this._frame);
 
         if (isFirefoxBuild) {
