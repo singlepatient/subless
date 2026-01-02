@@ -46,7 +46,11 @@ const StudyTestUi = ({ bridge }: Props) => {
                 return;
             }
 
-            const state = (message as UpdateStateMessage).state as StudyTestState & { themeType?: PaletteMode };
+            const state = (message as UpdateStateMessage).state as StudyTestState & { 
+                themeType?: PaletteMode;
+                showingResult?: boolean;
+                answerResults?: boolean[];
+            };
 
             if (state.themeType !== undefined) {
                 setThemeType(state.themeType);
@@ -61,6 +65,12 @@ const StudyTestUi = ({ bridge }: Props) => {
             if (state.blankedIndices !== undefined) {
                 setBlankedIndices(state.blankedIndices);
                 setAnswers(new Array(state.blankedIndices.length).fill(''));
+            }
+            
+            // Receive validation results from controller
+            if (state.showingResult && state.answerResults) {
+                setSubmitted(true);
+                setResults(state.answerResults);
             }
         });
 
@@ -80,20 +90,11 @@ const StudyTestUi = ({ bridge }: Props) => {
     }, []);
 
     const handleSubmit = useCallback(() => {
-        // Check answers against correct tokens
-        const newResults = blankedIndices.map((tokenIdx, answerIdx) => {
-            const correctToken = tokens[tokenIdx];
-            const userAnswer = answers[answerIdx].trim();
-            // Must have a non-empty answer that matches text or reading
-            if (!userAnswer) return false;
-            return userAnswer === correctToken.text || 
-                   userAnswer === correctToken.reading;
-        });
-        setResults(newResults);
-        setSubmitted(true);
+        // Send answers to controller for validation (with tokenization support)
+        // Results will come back via updateState message
         justSubmitted.current = true;
         bridge.sendMessageFromServer({ command: 'submit', answers } as any);
-    }, [bridge, answers, blankedIndices, tokens]);
+    }, [bridge, answers]);
 
     const handleContinue = useCallback(() => {
         const passed = results.every(r => r);

@@ -7,6 +7,8 @@ export interface StudyTestDisplayState {
     userAnswers: string[];
     showingResult: boolean;
     resultCorrect: boolean;
+    /** Per-answer correctness results from controller (computed with tokenization) */
+    answerResults?: boolean[];
 }
 
 /**
@@ -18,7 +20,7 @@ export function generateStudyTestHtml(
     themeType: 'dark' | 'light',
     isFullscreen: boolean
 ): string {
-    const { tokens, blankedIndices, userAnswers, showingResult, resultCorrect } = state;
+    const { tokens, blankedIndices, userAnswers, showingResult, resultCorrect, answerResults } = state;
     
     const fontSize = isFullscreen ? '28px' : '20px';
     const inputFontSize = isFullscreen ? '24px' : '18px';
@@ -44,7 +46,8 @@ export function generateStudyTestHtml(
             const correctAnswer = token.text;
             
             if (showingResult) {
-                const isCorrect = answer.trim() === correctAnswer.trim();
+                // Use controller-computed results if available, fallback to simple text comparison
+                const isCorrect = answerResults ? answerResults[inputIndex] : answer.trim() === correctAnswer.trim();
                 
                 if (isCorrect) {
                     // Correct: green text with subtle highlight, add spacing for separation from other results

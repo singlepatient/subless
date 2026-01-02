@@ -86,6 +86,8 @@ export default defineConfig({
                         'anki-ui.js',
                         'mp3-encoder-worker.js',
                         'pgs-parser-worker.js',
+                        'kuromoji-worker.js',
+                        'kuromoji-dict/*',
                         'video-data-sync-ui.js',
                         'video-select-ui.js',
                         'notification-ui.js',

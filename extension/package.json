@@ -14,7 +14,8 @@
         "zip:firefox": "yarn check && wxt zip -b firefox",
         "zip:firefox-android": "yarn check && wxt zip -b firefox-android --mv2 --sources",
         "compile": "tsc --noEmit",
-        "postinstall": "wxt prepare",
+        "copy-kuromoji-dict": "mkdir -p public/kuromoji-dict && cp ../node_modules/@sglkc/kuromoji/dict/*.dat.gz public/kuromoji-dict/",
+        "postinstall": "wxt prepare && yarn copy-kuromoji-dict",
         "check": "yarn workspace root run verify && yarn compile",
         "test": "jest"
     },

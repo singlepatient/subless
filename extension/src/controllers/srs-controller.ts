@@ -1,35 +1,8 @@
 import Binding from '../services/binding';
 import { StudyOverlay, StudyIndicatorOverlay, StudyTestDisplayState } from '../services/study-overlay';
-import { Fetcher, SubtitleModel, IndexedSubtitleModel, HttpPostMessage, VideoToExtensionCommand } from '@project/common';
-import { TokenPart, Yomitan } from '@project/common/yomitan';
-import { DictionaryTrack } from '@project/common/settings';
-import { v4 as uuidv4 } from 'uuid';
-
-/**
- * Fetcher that routes HTTP requests through the extension background script
- * to bypass CORS restrictions in content scripts.
- */
-class VideoFetcher implements Fetcher {
-    private readonly videoSrcCB: () => string;
-
-    constructor(videoSrcCB: () => string) {
-        this.videoSrcCB = videoSrcCB;
-    }
-
-    fetch(url: string, body: any) {
-        const httpPostCommand: VideoToExtensionCommand<HttpPostMessage> = {
-            sender: 'asbplayer-video',
-            message: {
-                command: 'http-post',
-                url,
-                body,
-                messageId: uuidv4(),
-            },
-            src: this.videoSrcCB(),
-        };
-        return browser.runtime.sendMessage(httpPostCommand);
-    }
-}
+import { SubtitleModel, IndexedSubtitleModel } from '@project/common';
+import { Tokenizer, TokenPart } from '@project/common/tokenizer';
+import { createTokenizer } from '../services/tokenizer-factory';
 
 export type LineStatus = 'pass' | 'fail' | 'incomplete';
 
@@ -60,7 +33,7 @@ export default class SrsController {
     private _frequency: number = 10;
     private _currentSubtitle?: IndexedSubtitleModel;
     private _currentTestTimeframe?: { start: number; end: number };
-    private _yomitan?: Yomitan;
+    private _tokenizer?: Tokenizer;
     private _themeType: 'dark' | 'light' = 'dark';
     
     // Per-video line status cache: Map<videoSrc, Map<subtitleIndex, LineTestInfo>>
@@ -92,7 +65,7 @@ export default class SrsController {
         
         // Wire up overlay callbacks
         this._studyOverlay.onReplay = () => this._replay();
-        this._studyOverlay.onSubmit = (answers) => this._handleSubmit(answers);
+        this._studyOverlay.onSubmit = (answers) => void this._handleSubmit(answers);
         this._studyOverlay.onContinue = (passed) => this._handleContinue(passed);
         this._studyOverlay.onInputChange = (index, value) => this._handleInputChange(index, value);
     }
@@ -176,7 +149,7 @@ export default class SrsController {
     }
 
     async updateSettings() {
-        const settings = await this._context.settings.get(['studyModeEnabled', 'studyModeFrequency', 'dictionaryTracks', 'themeType']);
+        const settings = await this._context.settings.get(['studyModeEnabled', 'studyModeFrequency', 'themeType']);
         this._enabled = settings.studyModeEnabled;
         this._frequency = settings.studyModeFrequency;
         this._themeType = settings.themeType;
@@ -192,29 +165,20 @@ export default class SrsController {
             this._indicatorOverlay.hide();
         }
         
-        // Find a dictionary track with a valid Yomitan URL for tokenization
-        const enabledTrack = settings.dictionaryTracks.find(
-            (dt: DictionaryTrack) => dt.dictionaryYomitanUrl
-        );
-        
-        if (enabledTrack) {
+        // Initialize Kuromoji tokenizer if not already initialized
+        if (!this._tokenizer) {
             try {
-                const fetcher = new VideoFetcher(() => this._context.video.src);
-                const yt = new Yomitan(enabledTrack, fetcher);
-                await yt.version(); // Validate connection
-                this._yomitan = yt;
+                this._tokenizer = await createTokenizer({ type: 'kuromoji' });
             } catch (e) {
-                console.warn('[SrsController] Failed to connect to Yomitan:', e);
-                this._yomitan = undefined;
+                console.warn('[SrsController] Failed to initialize Kuromoji tokenizer:', e);
+                this._tokenizer = undefined;
             }
-        } else {
-            this._yomitan = undefined;
         }
         
         console.log('[SrsController] Settings updated:', {
             enabled: this._enabled,
             frequency: this._frequency,
-            hasYomitan: !!this._yomitan,
+            hasTokenizer: !!this._tokenizer,
             theme: this._themeType,
         });
     }
@@ -234,7 +198,7 @@ export default class SrsController {
             text: subtitle.text.substring(0, 50),
             lineCount: this._lineCount,
             frequency: this._frequency,
-            hasYomitan: !!this._yomitan,
+            hasTokenizer: !!this._tokenizer,
             index: subtitle.index,
         });
 
@@ -278,15 +242,15 @@ export default class SrsController {
     }
 
     private async _showTest(subtitle: IndexedSubtitleModel, existingTest?: LineTestInfo): Promise<boolean> {
-        // Retry Yomitan init if needed
-        if (!this._yomitan) {
-            console.log('[SrsController] Retrying Yomitan initialization...');
+        // Retry tokenizer init if needed
+        if (!this._tokenizer) {
+            console.log('[SrsController] Retrying tokenizer initialization...');
             await this.updateSettings();
         }
         
-        if (!this._yomitan) {
-            console.warn('[SrsController] Yomitan not configured, cannot show test');
-            this._context.subtitleController.notification('error.studyModeNoYomitan');
+        if (!this._tokenizer) {
+            console.warn('[SrsController] Tokenizer not initialized, cannot show test');
+            this._context.subtitleController.notification('error.studyModeNoTokenizer');
             this._testLineIndices.delete(subtitle.index);
             return false;
         }
@@ -301,7 +265,7 @@ export default class SrsController {
                 blankedIndices = existingTest.blankedIndices;
             } else {
                 // Tokenize the subtitle text
-                const tokenGroups = await this._yomitan.tokenize(subtitle.text);
+                const tokenGroups = await this._tokenizer.tokenize(subtitle.text);
                 
                 // Flatten token groups into individual tokens
                 tokens = [];
@@ -316,12 +280,19 @@ export default class SrsController {
                     return false;
                 }
 
-                // Exclude tokens that are only whitespace or only punctuation/symbols
+                // Exclude tokens using POS-based filtering from Kuromoji
+                // - Skip symbols/punctuation (記号)
+                // - Only test known dictionary words when wordType is available
                 const nonPunctOrSpaceIndices = tokens
                     .map((t, i) => ({ token: t, index: i }))
                     .filter(({ token }) => {
                         const text = token.text.trim();
-                        return text !== '' && !/^([\p{P}\p{S}]+)$/u.test(text);
+                        if (!text) return false;
+                        
+                        const isSymbol = token.pos === '記号';
+                        const isKnownWord = token.wordType === undefined || token.wordType === 'KNOWN';
+                        
+                        return !isSymbol && isKnownWord;
                     })
                     .map(({ index }) => index);
 
@@ -454,28 +425,60 @@ export default class SrsController {
         // Don't re-render for input changes - they're handled by the DOM directly
     }
 
-    private _handleSubmit(answers: string[]) {
+    private async _handleSubmit(answers: string[]) {
         if (!this._currentSubtitle || !this._currentDisplayState) return;
         
         const { tokens, blankedIndices } = this._currentDisplayState;
         
-        // Check answers
-        let allCorrect = true;
+        // Check each answer - accept exact match, reading match, or tokenized reading match
+        const answerResults: boolean[] = [];
+        
         for (let i = 0; i < blankedIndices.length; i++) {
-            const correctAnswer = tokens[blankedIndices[i]].text.trim();
+            const token = tokens[blankedIndices[i]];
+            const correctText = token.text.trim();
             const userAnswer = answers[i]?.trim() || '';
-            if (userAnswer !== correctAnswer) {
-                allCorrect = false;
-                break;
+            
+            // 1. Exact text match
+            if (userAnswer === correctText) {
+                answerResults.push(true);
+                continue;
             }
+            
+            // 2. User typed the reading directly (hiragana)
+            const expectedReading = this._katakanaToHiragana(token.reading || token.text);
+            if (userAnswer === expectedReading) {
+                answerResults.push(true);
+                continue;
+            }
+            
+            // 3. User typed kanji - tokenize to get its reading and compare
+            if (this._tokenizer) {
+                try {
+                    const userTokens = await this._tokenizer.tokenize(userAnswer);
+                    const userReading = userTokens.flat()
+                        .map(t => this._katakanaToHiragana(t.reading || t.text))
+                        .join('');
+                    if (userReading === expectedReading) {
+                        answerResults.push(true);
+                        continue;
+                    }
+                } catch {
+                    // Tokenization failed, fall through to incorrect
+                }
+            }
+            
+            answerResults.push(false);
         }
         
-        // Update display to show result
+        const allCorrect = answerResults.every(r => r);
+        
+        // Update display to show result with per-answer results
         this._currentDisplayState = {
             ...this._currentDisplayState,
             userAnswers: answers,
             showingResult: true,
             resultCorrect: allCorrect,
+            answerResults,
         };
         this._studyOverlay.updateState(this._currentDisplayState);
         
@@ -514,5 +517,18 @@ export default class SrsController {
         }
         this._studyOverlay.dispose();
         this._indicatorOverlay.dispose();
+    }
+
+    /**
+     * Convert katakana to hiragana for reading comparison.
+     * Kuromoji returns readings in katakana, but users typically type in hiragana.
+     */
+    private _katakanaToHiragana(str: string): string {
+        // Katakana range: U+30A1 to U+30F6
+        // Hiragana range: U+3041 to U+3096
+        // Offset: 0x60
+        return str.replace(/[\u30A1-\u30F6]/g, (char) => 
+            String.fromCharCode(char.charCodeAt(0) - 0x60)
+        );
     }
 }
