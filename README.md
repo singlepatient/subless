@@ -27,6 +27,32 @@
     - **Auto-pause**: Automatically pause at the beginning or end of every subtitle.
 - **Use customizable keyboard shortcuts** to access most of asbplayer's features.
 
+---
+
+## About This Fork: asbplayer for Audio Recognition & Surface Form Mastery
+
+This fork of asbplayer is focused on helping Japanese language learners improve the automaticity of their **audio word recognition** and **surface form breakdown** skills while engaging with subtitled target language content. Study mode is designed to:
+
+- Test your ability to recognize and type words you hear, not just what you see.
+- Accept answers in kanji, hiragana, or a mix—matching by reading, not just surface form.
+- Use modern, offline Japanese tokenization (Kuromoji) for accurate word segmentation and reading extraction.
+- Support future integration with AnkiConnect for tracking word/morpheme recognition and learning progress.
+- Lay the groundwork for even more advanced tokenization (Sudachi) to handle colloquial speech and contractions.
+
+Hopefully this helps to establish a strong foundation for audio comprehension. I built this to address the "cheating" I would do when watching subtitled content - which has its own benefits of imprving your reading skills. Study mode is toggle-able, though, so no worries!
+
+### Example Screenshots
+
+| Study Mode (Kanji/Hiragana Matching) | Surface Form Breakdown | Audio Word Recognition |
+|:------------------------------------:|:---------------------:|:---------------------:|
+| ![Study Mode Example](docs/images/study-mode-example.png) | ![Surface Form Example](docs/images/surface-form-example.png) | ![Audio Recognition Example](docs/images/audio-recognition-example.png) |
+
+> _Place your screenshots in `docs/images/`_
+
+See below for critical changes, screenshots, and roadmap.
+
+---
+
 ## Thanks
 
 Thank you to all of my sponsors:
@@ -182,3 +208,29 @@ yarn workspace @project/extension run wxt zip -b firefox
 # Builds Firefox for Android extension to extension/.output/projectextension-<version>-firefox-android.zip
 yarn workspace @project/extension run wxt zip -b firefox-android --mv2
 ```
+
+---
+
+## ✨ Critical Changes in Study Mode (2026)
+
+### New Features
+
+- **Offline Japanese Tokenization**: asbplayer now uses a fully modular tokenizer architecture, with [Kuromoji](https://github.com/takuyaa/kuromoji.js) bundled for Japanese. This enables fast, offline, and accurate word segmentation and reading extraction—no Yomitan dependency required.
+- **POS-based Filtering**: Study mode now uses part-of-speech (POS) tags from Kuromoji to intelligently select which words are tested, skipping punctuation and non-words.
+- **Flexible Answer Matching**: You can answer with kanji, hiragana, or a mix—answers are validated by comparing readings, so both 何 and なに are accepted for the same blank.
+- **Particles and Audio Recognition**: Particles (助詞) are now testable, supporting audio-based word recognition and surface form breakdowns.
+- **Single Source of Truth for Validation**: All answer validation is now performed in the controller, ensuring consistent and accurate feedback, even for kanji/hiragana/katakana input.
+
+### Study Mode Goals
+
+The intention of the study mode is to improve **audio word recognition** and **surface form breakdowns** for language learners, helping you connect what you hear to what you see and type.
+
+---
+
+## 🚧 Roadmap & Future Plans
+
+- **AnkiConnect Integration**: Planned support for direct sentence and word selection, as well as word/morpheme recognition tracking and progressions, via [AnkiConnect](https://ankiweb.net/shared/info/2055492159).
+- **Sudachi Tokenizer Upgrade**: Considering an upgrade to [Sudachi](https://github.com/WorksApplications/Sudachi.rs) for even more accurate tokenization, especially for modern colloquial speech, contractions, and complex word forms.
+- **Smart Sentence Selection**: At the moment, random consecutive tokens are selected and testing is cued every three lines. Future sentence selection will be based on component familiarity (n+1): base word maturity in Anki, and word and morpheme recognition success in study mode. 
+
+---
