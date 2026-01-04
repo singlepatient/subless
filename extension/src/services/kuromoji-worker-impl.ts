@@ -66,6 +66,8 @@ export function onMessage() {
                     pos: t.pos,
                     // KNOWN = dictionary word, UNKNOWN = unknown word
                     wordType: t.word_type as 'KNOWN' | 'UNKNOWN' | undefined,
+                    // Dictionary/lemma form (e.g., '食べる' for '食べた')
+                    basicForm: t.basic_form,
                 }]);
                 self.postMessage({ type: 'result', id, tokens: result });
             } catch (error) {

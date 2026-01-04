@@ -1,8 +1,29 @@
 import Binding from '../services/binding';
-import { StudyOverlay, StudyIndicatorOverlay, StudyTestDisplayState } from '../services/study-overlay';
+import { StudyOverlay, StudyIndicatorOverlay, StudyTestDisplayState, StudyModeType } from '../services/study-overlay';
 import { SubtitleModel, IndexedSubtitleModel } from '@project/common';
 import { Tokenizer, TokenPart } from '@project/common/tokenizer';
 import { createTokenizer } from '../services/tokenizer-factory';
+import {
+    TokenSelector,
+    getTestableIndices,
+    LineSelector,
+    createKnowledgeGetter,
+    IndexedDBStudyRepository,
+    getAnkiStatus,
+    PriorityCalculator,
+    createRecognitionRepository,
+    INTENSITY_THRESHOLDS,
+    type LineSelectionStrategy,
+    type TokenBlankingStrategy,
+    type KnowledgeGetter,
+    type AnkiApi,
+    type StudyRepository,
+    type StudyDeckConfig,
+    type RecognitionRepository,
+    type VideoSession,
+    type StudyIntensity,
+    type FocusMode,
+} from '@project/common/study-mode';
 
 export type LineStatus = 'pass' | 'fail' | 'incomplete';
 
@@ -27,14 +48,33 @@ export default class SrsController {
     private readonly _context: Binding;
     private readonly _studyOverlay: StudyOverlay;
     private readonly _indicatorOverlay: StudyIndicatorOverlay;
+    private readonly _tokenSelector: TokenSelector;
+    private readonly _studyRepository: StudyRepository;
+    private readonly _recognitionRepository: RecognitionRepository;
+    private readonly _priorityCalculator: PriorityCalculator;
+    
+    private _lineSelector?: LineSelector;
+    private _ankiApi?: AnkiApi;
+    private _knowledgeGetter?: KnowledgeGetter;
     
     private _lineCount: number = 0;
     private _enabled: boolean = false;
     private _frequency: number = 10;
+    private _lineSelectionStrategy: LineSelectionStrategy = 'random';
+    private _tokenSelectionStrategy: TokenBlankingStrategy = 'random';
+    private _includeConjugations: boolean = true;
+    private _trackResults: boolean = true;
+    private _studyDecks: StudyDeckConfig[] = [];
+    private _intensity: StudyIntensity = 'medium';
+    private _rateLimitSeconds: number = 10;
+    private _focusMode: FocusMode = 'balanced';
     private _currentSubtitle?: IndexedSubtitleModel;
     private _currentTestTimeframe?: { start: number; end: number };
     private _tokenizer?: Tokenizer;
     private _themeType: 'dark' | 'light' = 'dark';
+    
+    // Per-video session state (in-memory only)
+    private _currentSession: VideoSession | null = null;
     
     // Per-video line status cache: Map<videoSrc, Map<subtitleIndex, LineTestInfo>>
     private _lineStatusCache: Map<string, Map<number, LineTestInfo>> = new Map();
@@ -47,6 +87,9 @@ export default class SrsController {
     
     // Track if test was completed (for cache status)
     private _testCompleted: boolean = false;
+    
+    // Track if answer has been submitted (to prevent input changes after submit)
+    private _answerSubmitted: boolean = false;
     
     // Fullscreen change listener for re-rendering
     private _fullscreenListener?: () => void;
@@ -62,6 +105,21 @@ export default class SrsController {
         
         // Create persistent indicator overlay
         this._indicatorOverlay = new StudyIndicatorOverlay(context.video);
+        
+        // Create token selector (knowledge getter can be added later for Anki integration)
+        this._tokenSelector = new TokenSelector();
+        
+        // Create study repository for tracking test results
+        this._studyRepository = new IndexedDBStudyRepository();
+        
+        // Create recognition repository for tracking recognition success/failure
+        this._recognitionRepository = createRecognitionRepository();
+        
+        // Wire up recognition repository to token selector for consistent priority scoring
+        this._tokenSelector.setRecognitionRepository(this._recognitionRepository);
+        
+        // Create priority calculator for two-tier system
+        this._priorityCalculator = new PriorityCalculator('balanced');
         
         // Wire up overlay callbacks
         this._studyOverlay.onReplay = () => this._replay();
@@ -89,6 +147,13 @@ export default class SrsController {
     }
 
     /**
+     * Get the indicator mode type based on line selection strategy.
+     */
+    get indicatorModeType(): StudyModeType {
+        return this._lineSelectionStrategy === 'prioritize_unknown' ? 'smart' : 'regular';
+    }
+
+    /**
      * Check if a subtitle at the given index is scheduled as a test line.
      * Used by SubtitleController to suppress display and prevent flash.
      */
@@ -109,7 +174,7 @@ export default class SrsController {
         this._enabled = value;
         if (value) {
             this._indicatorOverlay.setTheme(this._themeType);
-            this._indicatorOverlay.show(this.linesUntilTest);
+            this._indicatorOverlay.show(this.linesUntilTest, this.indicatorModeType);
         } else {
             this.hide();
             this._lineCount = 0;
@@ -120,7 +185,8 @@ export default class SrsController {
 
     set frequency(value: number) {
         this._frequency = value;
-        if (this._enabled) {
+        // Only update countdown in regular mode
+        if (this._enabled && this._lineSelectionStrategy === 'random') {
             this._indicatorOverlay.update(this.linesUntilTest);
         }
     }
@@ -131,6 +197,7 @@ export default class SrsController {
         this._currentTestTimeframe = undefined;
         this._currentDisplayState = undefined;
         this._testCompleted = false;
+        this._answerSubmitted = false;
     }
 
     bind() {
@@ -149,10 +216,36 @@ export default class SrsController {
     }
 
     async updateSettings() {
-        const settings = await this._context.settings.get(['studyModeEnabled', 'studyModeFrequency', 'themeType']);
+        const settings = await this._context.settings.get([
+            'studyModeEnabled',
+            'studyModeFrequency',
+            'studyModeLineSelection',
+            'studyModeTokenSelection',
+            'studyModeIncludeConjugations',
+            'studyModeDecks',
+            'studyModeTrackResults',
+            'studyModeIntensity',
+            'studyModeRateLimitSeconds',
+            'studyModeFocusMode',
+            'themeType',
+        ]);
         this._enabled = settings.studyModeEnabled;
         this._frequency = settings.studyModeFrequency;
+        this._lineSelectionStrategy = settings.studyModeLineSelection;
+        this._tokenSelectionStrategy = settings.studyModeTokenSelection;
+        this._includeConjugations = settings.studyModeIncludeConjugations;
+        this._trackResults = settings.studyModeTrackResults;
+        this._studyDecks = settings.studyModeDecks;
+        this._intensity = settings.studyModeIntensity;
+        this._rateLimitSeconds = settings.studyModeRateLimitSeconds;
+        this._focusMode = settings.studyModeFocusMode;
         this._themeType = settings.themeType;
+        
+        // Update priority calculator focus mode
+        this._priorityCalculator.setFocusMode(this._focusMode);
+        
+        // Update token selector focus mode for consistent priority scoring
+        this._tokenSelector.setFocusMode(this._focusMode);
         
         // Update overlay themes
         this._studyOverlay.setTheme(this._themeType);
@@ -160,7 +253,7 @@ export default class SrsController {
         
         // Update indicator visibility
         if (this._enabled) {
-            this._indicatorOverlay.show(this.linesUntilTest);
+            this._indicatorOverlay.show(this.linesUntilTest, this.indicatorModeType);
         } else {
             this._indicatorOverlay.hide();
         }
@@ -178,9 +271,51 @@ export default class SrsController {
         console.log('[SrsController] Settings updated:', {
             enabled: this._enabled,
             frequency: this._frequency,
+            lineSelection: this._lineSelectionStrategy,
+            tokenSelection: this._tokenSelectionStrategy,
             hasTokenizer: !!this._tokenizer,
+            hasAnkiApi: !!this._ankiApi,
             theme: this._themeType,
         });
+    }
+
+    /**
+     * Set the AnkiApi for knowledge-driven selection.
+     * This enables prioritize_unknown strategies for line and token selection.
+     */
+    setAnkiApi(ankiApi: AnkiApi) {
+        this._ankiApi = ankiApi;
+        
+        // Log configuration for debugging
+        console.log('[SrsController] AnkiApi configured');
+        console.log('[SrsController] Study decks:', JSON.stringify(this._studyDecks, null, 2));
+        console.log('[SrsController] Enabled decks:', this._studyDecks.filter(d => d.enabled).length);
+        
+        this._initializeKnowledgeGetter();
+    }
+
+    /**
+     * Initialize the knowledge getter and LineSelector when AnkiApi is available.
+     */
+    private _initializeKnowledgeGetter() {
+        if (!this._ankiApi) {
+            return;
+        }
+
+        // Create knowledge getter that combines Anki status and local study stats
+        const getAnkiStatusFn = async (lemma: string) => {
+            return getAnkiStatus(this._ankiApi!, this._studyDecks, lemma);
+        };
+
+        const getStudyStatsFn = async (lemma: string) => {
+            return this._studyRepository.getStats(lemma);
+        };
+
+        this._knowledgeGetter = createKnowledgeGetter(getAnkiStatusFn, getStudyStatsFn);
+        this._lineSelector = new LineSelector(this._knowledgeGetter);
+        this._tokenSelector.setKnowledgeGetter(this._knowledgeGetter);
+
+        console.log('[SrsController] Knowledge getter initialized with AnkiApi');
     }
 
     /**
@@ -216,8 +351,10 @@ export default class SrsController {
 
         this._lineCount++;
         
-        // Update indicator
-        this._indicatorOverlay.update(this.linesUntilTest);
+        // Update indicator countdown (only relevant in regular mode)
+        if (this._lineSelectionStrategy === 'random') {
+            this._indicatorOverlay.update(this.linesUntilTest);
+        }
         
         // Check if we have a cached test for this line (revisiting)
         const existingTest = this.getLineStatus(indexedSubtitle.index);
@@ -227,18 +364,169 @@ export default class SrsController {
             return false;
         }
         
-        if (this._lineCount % this._frequency === 0 || existingTest?.status === 'incomplete') {
-            console.log('[SrsController] Triggering test at line', this._lineCount);
+        // Determine if this line should be tested
+        const shouldTest = await this._shouldTestLine(indexedSubtitle, existingTest);
+        
+        if (shouldTest || existingTest?.status === 'incomplete') {
+            console.log('[SrsController] Triggering test at line', this._lineCount, 'strategy:', this._lineSelectionStrategy, 'intensity:', this._intensity);
             
             // Mark this line as a test line to prevent subtitle flash
             this._testLineIndices.add(indexedSubtitle.index);
             
             this._currentSubtitle = indexedSubtitle;
             const shown = await this._showTest(indexedSubtitle, existingTest);
+            
+            // Update session state if test was shown
+            if (shown) {
+                this._updateSessionOnCardShown(indexedSubtitle.index);
+            }
+            
             return shown;
         }
         
         return false;
+    }
+
+    /**
+     * Get or create session for the current video.
+     */
+    private _getOrCreateSession(): VideoSession {
+        const videoSrc = this._context.video.src;
+        
+        if (!this._currentSession || this._currentSession.videoSrc !== videoSrc) {
+            this._currentSession = {
+                videoSrc,
+                studiedLineIndices: new Set(),
+                cardsShownCount: 0,
+                lastCardTime: 0,
+            };
+        }
+        
+        return this._currentSession;
+    }
+
+    /**
+     * Update session state when a card is shown.
+     */
+    private _updateSessionOnCardShown(subtitleIndex: number) {
+        const session = this._getOrCreateSession();
+        session.studiedLineIndices.add(subtitleIndex);
+        session.cardsShownCount++;
+        session.lastCardTime = Date.now();
+    }
+
+    /**
+     * Check if rate limit allows showing another card.
+     */
+    private _isRateLimitSatisfied(): boolean {
+        const session = this._getOrCreateSession();
+        const now = Date.now();
+        const timeSinceLastCard = (now - session.lastCardTime) / 1000;
+        return session.lastCardTime === 0 || timeSinceLastCard >= this._rateLimitSeconds;
+    }
+
+    /**
+     * Check if priority-based selection is ready (has all required dependencies).
+     */
+    private _isPrioritySelectionReady(): boolean {
+        return !!this._tokenizer && !!this._ankiApi && this._studyDecks.length > 0;
+    }
+
+    /**
+     * Determine if a line should be tested using the configured strategy.
+     */
+    private async _shouldTestLine(subtitle: IndexedSubtitleModel, existingTest?: LineTestInfo): Promise<boolean> {
+        // Check if this line was already studied this session
+        const session = this._getOrCreateSession();
+        if (session.studiedLineIndices.has(subtitle.index)) {
+            return false;
+        }
+
+        // Check rate limiting
+        if (!this._isRateLimitSatisfied()) {
+            return false;
+        }
+
+        // Random strategy: simple frequency-based selection (fallback mode)
+        if (this._lineSelectionStrategy === 'random') {
+            return this._lineCount % this._frequency === 0;
+        }
+
+        // prioritize_unknown strategy: use priority-based scoring only
+        // No fallback to frequency - if not ready, skip testing
+        if (!this._isPrioritySelectionReady()) {
+            console.log('[SrsController] Priority selection not ready (missing tokenizer, AnkiApi, or study decks)');
+            return false;
+        }
+
+        try {
+            // Tokenize to score the line
+            const tokenGroups = await this._tokenizer!.tokenize(subtitle.text);
+            const tokens: TokenPart[] = tokenGroups.flat();
+            
+            // Get testable tokens
+            const testable = tokens.filter(
+                (t) => t.pos !== '記号' && t.text.trim() !== '' && (t.wordType === undefined || t.wordType === 'KNOWN')
+            );
+
+            if (testable.length === 0) {
+                return false;
+            }
+
+            // Calculate priority-based score for the line
+            const lineScore = await this._calculateLinePriorityScore(testable);
+            
+            // Check if score exceeds intensity threshold
+            const threshold = INTENSITY_THRESHOLDS[this._intensity];
+            const shouldTrigger = this._priorityCalculator.shouldTriggerStudyCard(lineScore, this._intensity);
+            
+            // Flash the assessment result on the indicator overlay
+            this._indicatorOverlay.flashLineAssessment(lineScore, threshold, shouldTrigger, testable.length);
+            
+            return shouldTrigger;
+        } catch (e) {
+            console.warn('[SrsController] Priority scoring failed:', e);
+            return false;
+        }
+    }
+
+    /**
+     * Calculate priority score for a line based on its tokens.
+     */
+    private async _calculateLinePriorityScore(tokens: TokenPart[]): Promise<number> {
+        let totalScore = 0;
+
+        for (const token of tokens) {
+            // Build candidate lemmas: basicForm (kanji), text, and reading (kana)
+            // This handles cases where Anki cards might store kanji or kana forms
+            const candidates: string[] = [];
+            if (token.basicForm) candidates.push(token.basicForm);
+            if (token.text && token.text !== token.basicForm) candidates.push(token.text);
+            if (token.reading) {
+                const hiraganaReading = this._katakanaToHiragana(token.reading);
+                if (!candidates.includes(hiraganaReading)) candidates.push(hiraganaReading);
+            }
+            
+            // Get Anki status using all candidate lemmas
+            let ankiStatus: 'uncollected' | 'new' | 'learning' | 'young' | 'mature' = 'uncollected';
+            if (this._ankiApi && this._studyDecks.length > 0) {
+                try {
+                    ankiStatus = await getAnkiStatus(this._ankiApi, this._studyDecks, candidates);
+                } catch {
+                    // Ignore errors, treat as uncollected
+                }
+            }
+
+            // Get recognition stats (use primary lemma)
+            const primaryLemma = token.basicForm || token.text;
+            const recognitionStats = await this._recognitionRepository.getStats(primaryLemma);
+
+            // Calculate priority
+            const priority = this._priorityCalculator.calculatePriority(primaryLemma, ankiStatus, recognitionStats);
+            totalScore += priority.finalPriority;
+        }
+
+        return totalScore;
     }
 
     private async _showTest(subtitle: IndexedSubtitleModel, existingTest?: LineTestInfo): Promise<boolean> {
@@ -280,33 +568,24 @@ export default class SrsController {
                     return false;
                 }
 
-                // Exclude tokens using POS-based filtering from Kuromoji
-                // - Skip symbols/punctuation (記号)
-                // - Only test known dictionary words when wordType is available
-                const nonPunctOrSpaceIndices = tokens
-                    .map((t, i) => ({ token: t, index: i }))
-                    .filter(({ token }) => {
-                        const text = token.text.trim();
-                        if (!text) return false;
-                        
-                        const isSymbol = token.pos === '記号';
-                        const isKnownWord = token.wordType === undefined || token.wordType === 'KNOWN';
-                        
-                        return !isSymbol && isKnownWord;
-                    })
-                    .map(({ index }) => index);
-
-                if (nonPunctOrSpaceIndices.length === 0) {
+                // Check if there are any testable tokens
+                const testableIndices = getTestableIndices(tokens);
+                if (testableIndices.length === 0) {
                     this._testLineIndices.delete(subtitle.index);
                     return false;
                 }
 
-                // Select random consecutive non-punctuation/non-space tokens to blank (1-3 tokens)
-                const blankCount = Math.min(Math.floor(Math.random() * 3) + 1, nonPunctOrSpaceIndices.length);
-                const startPos = Math.floor(Math.random() * (nonPunctOrSpaceIndices.length - blankCount + 1));
-                blankedIndices = [];
-                for (let i = 0; i < blankCount; i++) {
-                    blankedIndices.push(nonPunctOrSpaceIndices[startPos + i]);
+                // Use TokenSelector to pick which tokens to blank
+                // This handles conjugation grouping (e.g., 食べ + ました as one unit)
+                blankedIndices = await this._tokenSelector.selectTokensToBlank(tokens, {
+                    strategy: this._tokenSelectionStrategy,
+                    includeConjugations: this._includeConjugations,
+                    maxBlanks: 3,
+                });
+
+                if (blankedIndices.length === 0) {
+                    this._testLineIndices.delete(subtitle.index);
+                    return false;
                 }
             }
 
@@ -381,6 +660,7 @@ export default class SrsController {
         this._currentTestTimeframe = undefined;
         this._currentDisplayState = undefined;
         this._testCompleted = false;
+        this._answerSubmitted = false;
     }
 
     private _replay() {
@@ -414,7 +694,8 @@ export default class SrsController {
     }
 
     private _handleInputChange(index: number, value: string) {
-        if (!this._currentDisplayState) return;
+        // Don't allow input changes after answer has been submitted
+        if (!this._currentDisplayState || this._answerSubmitted) return;
         
         const newAnswers = [...this._currentDisplayState.userAnswers];
         newAnswers[index] = value;
@@ -427,6 +708,10 @@ export default class SrsController {
 
     private async _handleSubmit(answers: string[]) {
         if (!this._currentSubtitle || !this._currentDisplayState) return;
+        
+        // Prevent double submission
+        if (this._answerSubmitted) return;
+        this._answerSubmitted = true;
         
         const { tokens, blankedIndices } = this._currentDisplayState;
         
@@ -472,6 +757,11 @@ export default class SrsController {
         
         const allCorrect = answerResults.every(r => r);
         
+        // Save study records for each blanked token
+        if (this._trackResults) {
+            await this._saveStudyRecords(tokens, blankedIndices, answerResults);
+        }
+        
         // Update display to show result with per-answer results
         this._currentDisplayState = {
             ...this._currentDisplayState,
@@ -483,6 +773,53 @@ export default class SrsController {
         this._studyOverlay.updateState(this._currentDisplayState);
         
         this._testCompleted = true;
+    }
+
+    /**
+     * Save study records for each tested token.
+     */
+    private async _saveStudyRecords(
+        tokens: TokenPart[],
+        blankedIndices: number[],
+        answerResults: boolean[]
+    ): Promise<void> {
+        const timestamp = Date.now();
+        const mediaSource = this._context.video?.src || '';
+        const sentenceContext = tokens.map(t => t.text).join('');
+
+        // Prepare recognition attempts for batch recording
+        const recognitionAttempts: Array<{ lemma: string; reading: string; success: boolean }> = [];
+
+        for (let i = 0; i < blankedIndices.length; i++) {
+            const token = tokens[blankedIndices[i]];
+            const lemma = token.basicForm || token.text;
+            const reading = this._katakanaToHiragana(token.reading || token.text);
+            const success = answerResults[i];
+
+            // Add to recognition attempts
+            recognitionAttempts.push({ lemma, reading, success });
+
+            try {
+                await this._studyRepository.save({
+                    lemma,
+                    reading,
+                    surfaceForm: token.text,
+                    result: success ? 'correct' : 'incorrect',
+                    timestamp,
+                    sentenceContext,
+                    mediaSource,
+                });
+            } catch (e) {
+                console.warn('[SrsController] Failed to save study record:', e);
+            }
+        }
+
+        // Batch record recognition attempts
+        try {
+            await this._recognitionRepository.recordAttemptsBatch(recognitionAttempts);
+        } catch (e) {
+            console.warn('[SrsController] Failed to record recognition attempts:', e);
+        }
     }
 
     private _handleContinue(passed: boolean) {
@@ -505,6 +842,7 @@ export default class SrsController {
         this._currentTestTimeframe = undefined;
         this._currentDisplayState = undefined;
         this._testCompleted = false;
+        this._answerSubmitted = false;
         
         this.onTestComplete?.(passed);
         this._context.play();

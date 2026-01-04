@@ -91,7 +91,9 @@ export default defineBackground(() => {
                 return;
             }
 
-            const stats = await watchTimeRepository.getStats(365);
+            const now = Date.now();
+            const yearAgo = now - 365 * 24 * 60 * 60 * 1000;
+            const stats = await watchTimeRepository.getStats(yearAgo, now);
             const streak = stats.currentStreak;
 
             if (streak > 0) {

@@ -262,16 +262,13 @@
     transform-origin: center bottom;
 }
 
-/* Study Mode Indicator - Always visible badge */
+/* Study Mode Indicator - Always visible badge in upper right */
 .asbplayer-study-indicator-container {
     position: absolute !important;
-    transform: translate(50%, -100%) !important;
+    transform: translateX(-50%) !important;
     display: inline-block !important;
     z-index: 2147483645 !important;
     pointer-events: none !important;
-    /* Position to the right side */
-    left: auto !important;
-    right: 20px !important;
 }
 
 .asbplayer-study-indicator-content {

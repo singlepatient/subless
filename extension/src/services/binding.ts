@@ -12,6 +12,8 @@ import {
     CurrentTimeToVideoMessage,
     EncodeMp3InServiceWorkerMessage,
     ExtensionSyncMessage,
+    Fetcher,
+    HttpPostMessage,
     ImageCaptureParams,
     NotificationDialogMessage,
     NotifyErrorMessage,
@@ -79,6 +81,8 @@ import { shouldShowUpdateAlert } from './update-alert';
 import { bufferToBase64 } from '@project/common/base64';
 import { pgsParserWorkerFactory } from './pgs-parser-worker-factory';
 import { WatchTimeTracker } from './watch-time-tracker';
+import { Anki } from '@project/common/anki';
+import { v4 as uuidv4 } from 'uuid';
 
 let netflix = false;
 document.addEventListener('asbplayer-netflix-enabled', (e) => {
@@ -1024,6 +1028,31 @@ export default class Binding {
 
         await this.srsController.updateSettings();
         this.srsController.bind();
+        
+        // Wire up AnkiApi for knowledge-driven study mode if deck config exists
+        if (currentSettings.studyModeDecks && currentSettings.studyModeDecks.length > 0) {
+            const ankiSettings = extractAnkiSettings(currentSettings);
+            // Use VideoFetcher to route requests through extension background script
+            // This avoids CORS/CSP issues when fetching from content scripts
+            const videoFetcher: Fetcher = {
+                fetch: (url: string, body: any) => {
+                    const httpPostCommand: VideoToExtensionCommand<HttpPostMessage> = {
+                        sender: 'asbplayer-video',
+                        message: {
+                            command: 'http-post',
+                            url,
+                            body,
+                            messageId: uuidv4(),
+                        },
+                        src: this.video.src,
+                    };
+                    return browser.runtime.sendMessage(httpPostCommand);
+                },
+            };
+            const anki = new Anki(ankiSettings, videoFetcher);
+            this.srsController.setAnkiApi(anki);
+        }
+        
         await i18nInit(currentSettings.language);
     }
 

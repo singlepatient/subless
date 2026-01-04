@@ -185,6 +185,7 @@ export class MobileVideoOverlayController {
             themeType,
             studyModeEnabled: this._context.srsController.enabled,
             studyModeLinesUntilTest: this._context.srsController.linesUntilTest,
+            studyModeType: this._context.srsController.indicatorModeType,
         };
         return model;
     }

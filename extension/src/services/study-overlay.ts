@@ -193,36 +193,117 @@ export function generateStudyTestHtml(
 /**
  * Generates inline HTML for the persistent study mode indicator.
  */
+export type StudyModeType = 'regular' | 'smart';
+
 export function generateStudyIndicatorHtml(
     linesUntilTest: number,
     themeType: 'dark' | 'light',
-    isFullscreen: boolean
+    isFullscreen: boolean,
+    modeType: StudyModeType = 'regular',
+    containerWidth: number = 800
 ): string {
-    const size = isFullscreen ? '48px' : '36px';
-    const fontSize = isFullscreen ? '14px' : '11px';
-    const bgColor = themeType === 'dark' ? 'rgba(50, 50, 50, 0.85)' : 'rgba(255, 255, 255, 0.85)';
+    const height = isFullscreen ? '32px' : '24px';
+    const fontSize = isFullscreen ? '12px' : '10px';
+    const iconSize = isFullscreen ? '16px' : '14px';
+    const bgColor = themeType === 'dark' ? 'rgba(50, 50, 50, 0.9)' : 'rgba(255, 255, 255, 0.9)';
     const textColor = themeType === 'dark' ? '#ffffff' : '#000000';
-    const accentColor = '#2196f3';
+    const accentColor = modeType === 'smart' ? '#9c27b0' : '#2196f3'; // Purple for smart, blue for regular
+    
+    // Icon SVG based on mode
+    const icon = modeType === 'smart' 
+        ? `<svg width="${iconSize}" height="${iconSize}" viewBox="0 0 24 24" fill="${accentColor}">
+            <path d="M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z"/>
+           </svg>` // Code/smart icon
+        : `<svg width="${iconSize}" height="${iconSize}" viewBox="0 0 24 24" fill="${accentColor}">
+            <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/>
+           </svg>`; // Clock/timer icon
+    
+    // Content based on mode
+    const content = modeType === 'smart'
+        ? `<span style="font-weight: 600;">Smart</span>`
+        : `<span style="font-weight: 600;">${linesUntilTest}</span>`;
+    
+    // The container is centered by the overlay system. We need a wrapper to shift content to the right.
+    // We use flexbox with justify-content: flex-end to push content to the right side.
+    const rightOffset = isFullscreen ? '20px' : '10px';
     
     return `
-        <div class="asbplayer-study-indicator" style="
-            width: ${size};
-            height: ${size};
-            border-radius: 50%;
-            background: ${bgColor};
-            color: ${textColor};
+        <div style="
+            width: ${containerWidth}px;
             display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-            border: 2px solid ${accentColor};
-            user-select: none;
-            pointer-events: none;
+            justify-content: flex-end;
+            padding-right: ${rightOffset};
         ">
-            <span style="font-size: ${fontSize}; font-weight: bold;">${linesUntilTest}</span>
-            <span style="font-size: ${isFullscreen ? '10px' : '8px'}; opacity: 0.7;">lines</span>
+            <div class="asbplayer-study-indicator" style="
+                height: ${height};
+                padding: 0 10px;
+                border-radius: 12px;
+                background: ${bgColor};
+                color: ${textColor};
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                font-size: ${fontSize};
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+                border: 1.5px solid ${accentColor};
+                user-select: none;
+                pointer-events: none;
+                white-space: nowrap;
+            ">
+                ${icon}
+                ${content}
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Generates HTML for flashing line assessment results.
+ */
+export function generateLineAssessmentFlashHtml(
+    score: number,
+    threshold: number,
+    selected: boolean,
+    themeType: 'dark' | 'light',
+    containerWidth: number,
+    tokenCount?: number
+): string {
+    const bgColor = selected ? 'rgba(76, 175, 80, 0.95)' : 'rgba(80, 80, 80, 0.95)';
+    const borderColor = selected ? '#4CAF50' : '#888';
+    const textColor = '#ffffff';
+    
+    // Calculate per-token average (helps identify if all tokens are uncollected)
+    const perToken = tokenCount && tokenCount > 0 ? (score / tokenCount).toFixed(2) : '?';
+    
+    return `
+        <div style="
+            width: ${containerWidth}px;
+            display: flex;
+            justify-content: flex-end;
+            padding-right: 10px;
+        ">
+            <div style="
+                padding: 6px 14px;
+                border-radius: 8px;
+                background: ${bgColor};
+                color: ${textColor};
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
+                font-size: 11px;
+                border: 1.5px solid ${borderColor};
+                white-space: nowrap;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+            ">
+                <span style="opacity: 0.8;">Score:</span> <strong>${score.toFixed(2)}</strong>
+                <span style="margin: 0 4px; opacity: 0.5;">|</span>
+                <span style="opacity: 0.8;">Thr:</span> <strong>${threshold.toFixed(1)}</strong>
+                <span style="margin: 0 4px; opacity: 0.5;">|</span>
+                <span style="opacity: 0.7;">${tokenCount ?? '?'}tok @${perToken}</span>
+                <span style="margin: 0 4px; opacity: 0.5;">|</span>
+                ${selected 
+                    ? '<span style="color: #90EE90;">✓ TEST</span>' 
+                    : '<span style="opacity: 0.7;">○ Skip</span>'}
+            </div>
         </div>
     `;
 }
@@ -473,23 +554,27 @@ export class StudyOverlay {
 }
 
 /**
- * StudyIndicatorOverlay shows a persistent badge with lines until next test.
+ * StudyIndicatorOverlay shows a persistent badge with study mode status.
+ * Shows countdown for regular mode, or "Smart" label for smart mode.
  */
 export class StudyIndicatorOverlay {
     private readonly _overlay: CachingElementOverlay;
+    private readonly _targetElement: HTMLElement;
     private _visible: boolean = false;
     private _linesUntilTest: number = 0;
     private _themeType: 'dark' | 'light' = 'dark';
+    private _modeType: StudyModeType = 'regular';
 
     constructor(targetElement: HTMLElement) {
+        this._targetElement = targetElement;
         const params: ElementOverlayParams = {
             targetElement,
             nonFullscreenContainerClassName: 'asbplayer-study-indicator-container',
             nonFullscreenContentClassName: 'asbplayer-study-indicator-content',
             fullscreenContainerClassName: 'asbplayer-study-indicator-container',
             fullscreenContentClassName: 'asbplayer-study-indicator-fullscreen-content',
-            offsetAnchor: OffsetAnchor.bottom,
-            contentPositionOffset: 20,
+            offsetAnchor: OffsetAnchor.top,
+            contentPositionOffset: 10,
             contentWidthPercentage: -1, // Use maxWidth instead
             onMouseOver: () => {},
         };
@@ -507,8 +592,9 @@ export class StudyIndicatorOverlay {
         }
     }
 
-    show(linesUntilTest: number) {
+    show(linesUntilTest: number, modeType: StudyModeType = 'regular') {
         this._linesUntilTest = linesUntilTest;
+        this._modeType = modeType;
         this._visible = true;
         this._render();
     }
@@ -518,6 +604,35 @@ export class StudyIndicatorOverlay {
         if (this._visible) {
             this._render();
         }
+    }
+
+    setMode(modeType: StudyModeType) {
+        this._modeType = modeType;
+        if (this._visible) {
+            this._render();
+        }
+    }
+
+    /**
+     * Flash the line assessment result for debugging/feedback.
+     * Shows score, threshold, token count, and whether the line was selected.
+     */
+    flashLineAssessment(score: number, threshold: number, selected: boolean, tokenCount?: number) {
+        if (!this._visible) return;
+        
+        const containerWidth = this._targetElement.getBoundingClientRect().width;
+        const html = generateLineAssessmentFlashHtml(score, threshold, selected, this._themeType, containerWidth, tokenCount);
+        
+        // Clear cache for this key to ensure fresh HTML is rendered each time
+        this._overlay.uncacheHtmlKey('line-assessment');
+        this._overlay.setHtml([{ key: 'line-assessment', html: () => html }]);
+        
+        // Flash for 1.5 seconds then restore normal indicator
+        setTimeout(() => {
+            if (this._visible) {
+                this._render();
+            }
+        }, 1500);
     }
 
     hide() {
@@ -537,7 +652,8 @@ export class StudyIndicatorOverlay {
         if (!this._visible) return;
 
         const isFullscreen = !!document.fullscreenElement;
-        const html = generateStudyIndicatorHtml(this._linesUntilTest, this._themeType, isFullscreen);
+        const containerWidth = this._targetElement.getBoundingClientRect().width;
+        const html = generateStudyIndicatorHtml(this._linesUntilTest, this._themeType, isFullscreen, this._modeType, containerWidth);
         
         this._overlay.setHtml([{ key: 'study-indicator', html: () => html }]);
     }
